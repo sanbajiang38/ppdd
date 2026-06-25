@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="拼豆施工图">
+<meta name="theme-color" content="#F3F1F7">
+<title>拼豆施工图 · PPDD</title>
+<style>
+  :root{
+    --bg:#F3F1F7;            /* 柔雾紫白 */
+    --board:#ECE8F4;         /* 洞洞板色 */
+    --dot:#DCD6EC;           /* 洞点 */
+    --card:#FFFFFF;
+    --ink:#241F2E;           /* 葡萄墨 */
+    --muted:#8B8398;
+    --line:#E7E2F0;
+    --grape:#6A4BD6;         /* 主操作色 */
+    --grape-d:#553BB0;
+    --candy:#FF5CA8;         /* 糖果粉点缀 */
+    --ok:#2BB673;
+    --radius:18px;
+    --shadow:0 6px 24px rgba(58,40,110,.10);
+    --safe-b:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    background-image:radial-gradient(var(--dot) 1.4px, transparent 1.6px);
+    background-size:18px 18px;
+    color:var(--ink);
+    font-family:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+    padding-bottom:calc(28px + var(--safe-b));
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:0 16px;}
+
+  /* 顶栏 */
+  header{display:flex;align-items:center;gap:10px;padding:18px 16px 14px;max-width:520px;margin:0 auto;}
+  .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--grape),var(--candy));
+    position:relative;box-shadow:var(--shadow);flex:none;}
+  .logo::after{content:"";position:absolute;inset:0;border-radius:10px;
+    background:radial-gradient(circle at 30% 26%, rgba(255,255,255,.85), transparent 42%);}
+  .brand{font-weight:800;font-size:19px;letter-spacing:.5px;}
+  .brand small{display:block;font-weight:600;font-size:11px;color:var(--muted);letter-spacing:2px;}
+
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:16px;margin-bottom:14px;border:1px solid var(--line);}
+  .card h2{margin:0 0 12px;font-size:14px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;}
+  .card h2 .n{width:20px;height:20px;border-radius:7px;background:var(--board);color:var(--grape);
+    font-size:12px;font-weight:800;display:grid;place-items:center;}
+
+  /* 选图 */
+  .drop{border:2px dashed #CFC6E6;border-radius:14px;background:#FAF8FF;
+    padding:26px 16px;text-align:center;cursor:pointer;transition:.15s;}
+  .drop:active{transform:scale(.99);background:#F3EEFF;}
+  .drop .ico{font-size:30px;}
+  .drop p{margin:8px 0 2px;font-weight:700;}
+  .drop span{font-size:12px;color:var(--muted);}
+  .preview{display:none;text-align:center;}
+  .preview img{max-width:100%;max-height:200px;border-radius:12px;border:1px solid var(--line);background:#fff;}
+  .preview .re{margin-top:10px;font-size:13px;color:var(--grape);font-weight:700;}
+
+  /* 控件 */
+  .row{margin-bottom:16px;}
+  .row:last-child{margin-bottom:4px;}
+  .row .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .row .lab{font-weight:700;font-size:14px;}
+  .row .val{font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,monospace;
+    font-size:13px;color:var(--grape);font-weight:700;}
+  .row .hint{font-size:11.5px;color:var(--muted);margin-top:5px;}
+  input[type=range]{width:100%;-webkit-appearance:none;height:6px;border-radius:6px;
+    background:var(--board);outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;
+    background:#fff;border:none;box-shadow:0 2px 6px rgba(58,40,110,.28);
+    background-image:radial-gradient(circle at 32% 30%, #fff 0 30%, var(--grape) 32%);cursor:pointer;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{flex:1;min-width:54px;text-align:center;padding:9px 0;border-radius:11px;border:1.5px solid var(--line);
+    background:#fff;font-weight:700;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;cursor:pointer;transition:.12s;}
+  .chip.on{border-color:var(--grape);color:var(--grape);background:#F5F1FF;}
+
+  .adv-toggle{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--grape);
+    cursor:pointer;user-select:none;padding:4px 0;}
+  .adv-toggle .arrow{transition:.2s;}
+  .adv-toggle.open .arrow{transform:rotate(90deg);}
+  .adv{display:none;padding-top:12px;}
+  .adv.open{display:block;}
+
+  /* 生成按钮 */
+  .go{width:100%;border:none;border-radius:14px;padding:16px;font-size:16px;font-weight:800;
+    color:#fff;background:linear-gradient(135deg,var(--grape),var(--grape-d));
+    box-shadow:0 8px 20px rgba(106,75,214,.32);cursor:pointer;transition:.12s;letter-spacing:1px;}
+  .go:active{transform:translateY(1px) scale(.995);}
+  .go:disabled{opacity:.6;}
+  .go .spin{display:inline-block;width:15px;height:15px;border:2.5px solid rgba(255,255,255,.4);
+    border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:8px;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+
+  /* 结果 */
+  #result{display:none;}
+  .result-img{width:100%;border-radius:12px;border:1px solid var(--line);background:#fff;display:block;}
+  .save-tip{font-size:11.5px;color:var(--muted);text-align:center;margin:8px 0 14px;}
+  .actions{display:flex;gap:10px;}
+  .actions button{flex:1;border:none;border-radius:13px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;transition:.12s;}
+  .actions button:active{transform:translateY(1px);}
+  .btn-share{color:#fff;background:linear-gradient(135deg,var(--candy),#E5447D);box-shadow:0 6px 16px rgba(229,68,125,.3);}
+  .btn-save{color:var(--grape);background:#F5F1FF;border:1.5px solid #E2D9F7 !important;}
+
+  /* 统计 */
+  .stats{display:flex;gap:10px;margin:16px 0 6px;}
+  .stat{flex:1;background:var(--board);border-radius:12px;padding:11px;text-align:center;}
+  .stat b{display:block;font-size:19px;font-variant-numeric:tabular-nums;}
+  .stat span{font-size:11px;color:var(--muted);}
+  .legend{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
+  .lg{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .bead{width:20px;height:20px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);position:relative;}
+  .bead::after{content:"";position:absolute;width:6px;height:6px;border-radius:50%;top:3px;left:4px;background:rgba(255,255,255,.7);}
+  .lg .t{font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;}
+  .lg .t b{font-weight:800;}
+  .lg .t small{color:var(--muted);}
+
+  .err{display:none;background:#FFF0F4;color:#C2185B;border:1px solid #F7C9DA;
+    border-radius:12px;padding:12px 14px;font-size:13px;font-weight:600;margin-bottom:14px;}
+  footer{text-align:center;font-size:11px;color:var(--muted);padding:8px 0 4px;}
+  footer b{color:var(--grape);}
+  .a2hs{font-size:11px;color:var(--muted);text-align:center;margin-top:2px;}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"></div>
+  <div class="brand">拼豆施工图<small>PPDD GENERATOR</small></div>
+</header>
+
+<div class="wrap">
+
+  <div class="err" id="err"></div>
+
+  <!-- 选图 -->
+  <div class="card">
+    <h2><span class="n">1</span>选择图片</h2>
+    <div class="drop" id="drop">
+      <div class="ico">🧩</div>
+      <p>点这里选图</p>
+      <span>支持 PNG / JPG / SVG / WEBP · 干净纯色背景效果最好</span>
+    </div>
+    <div class="preview" id="preview">
+      <img id="previewImg" alt="预览">
+      <div class="re" id="reChoose">↻ 重新选择</div>
+    </div>
+    <input type="file" id="file" accept="image/*,.svg" hidden>
+  </div>
+
+  <!-- 参数 -->
+  <div class="card">
+    <h2><span class="n">2</span>调整参数</h2>
+
+    <div class="row">
+      <div class="top"><span class="lab">颜色数</span><span class="val" id="kVal">24</span></div>
+      <input type="range" id="k" min="6" max="40" value="24">
+      <div class="hint">最多用多少种豆色 · 越大越细腻，但配色更难买齐</div>
+    </div>
+
+    <div class="row">
+      <div class="top"><span class="lab">分辨率（成品格子数）</span></div>
+      <div class="chips" id="gridChips">
+        <div class="chip" data-v="32">32</div>
+        <div class="chip on" data-v="48">48</div>
+        <div class="chip" data-v="64">64</div>
+        <div class="chip" data-v="80">80</div>
+        <div class="chip" data-v="96">96</div>
+      </div>
+      <div class="hint">按长边算 · 越大越精细、生成越慢（手机建议 48–64）</div>
+    </div>
+
+    <div class="adv-toggle" id="advToggle"><span class="arrow">▸</span> 高级选项</div>
+    <div class="adv" id="adv">
+      <div class="row">
+        <div class="top"><span class="lab">合并强度</span><span class="val" id="mVal">18</span></div>
+        <input type="range" id="merge" min="0" max="30" value="18">
+        <div class="hint">把相近颜色并成一种 · 调大→颜色更少更扁平；0=不合并</div>
+      </div>
+      <div class="row">
+        <div class="top"><span class="lab">描边保留</span><span class="val" id="dVal">30%</span></div>
+        <input type="range" id="dark" min="10" max="60" value="30">
+        <div class="hint">黑色描边/细线的保留程度 · 调小→保留更多黑边</div>
+      </div>
+    </div>
+  </div>
+
+  <button class="go" id="go" disabled>先选一张图片</button>
+
+  <!-- 结果 -->
+  <div id="result">
+    <div class="card" style="margin-top:14px;">
+      <h2><span class="n">3</span>施工图</h2>
+      <img class="result-img" id="resultImg" alt="施工图">
+      <div class="save-tip">iOS 可<b>长按图片</b>保存 · 或用下方按钮</div>
+      <div class="actions">
+        <button class="btn-save" id="btnSave">保存图片</button>
+        <button class="btn-share" id="btnShare">分享</button>
+      </div>
+      <div class="stats">
+        <div class="stat"><b id="stSize">–</b><span>成品尺寸</span></div>
+        <div class="stat"><b id="stTotal">–</b><span>豆子总数</span></div>
+        <div class="stat"><b id="stColors">–</b><span>颜色种类</span></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <footer>
+    全部在你的手机本地生成，图片不会上传 · <b>PPDD</b><br>
+    <span class="a2hs">想当 App 用？浏览器菜单选「添加到主屏幕」</span>
+  </footer>
+</div>
+
+<canvas id="work" hidden></canvas>
+
+<script>
+/* ============ 核心算法（与桌面版同源，纯 JS）============ */
+function genLabels(n){const r=[];let i=0;while(r.length<n){if(i<26)r.push(String.fromCharCode(65+i));else r.push(String.fromCharCode(65+(Math.floor(i/26)-1))+String.fromCharCode(65+(i%26)));i++;}return r;}
+function rgb2lab(r,g,b){let R=r/255,G=g/255,B=b/255;R=R>0.04045?Math.pow((R+0.055)/1.055,2.4):R/12.92;G=G>0.04045?Math.pow((G+0.055)/1.055,2.4):G/12.92;B=B>0.04045?Math.pow((B+0.055)/1.055,2.4):B/12.92;let X=(R*0.4124564+G*0.3575761+B*0.1804375)/0.95047,Y=(R*0.2126729+G*0.7151522+B*0.0721750),Z=(R*0.0193339+G*0.1191920+B*0.9503041)/1.08883;const f=t=>t>0.008856?Math.cbrt(t):(903.3*t+16)/116;const fx=f(X),fy=f(Y),fz=f(Z);return[116*fy-16,500*(fx-fy),200*(fy-fz)];}
+function mulberry32(s){return function(){s|=0;s=(s+0x6D2B79F5)|0;let t=Math.imul(s^(s>>>15),1|s);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+function kmeans(points,n,k,opts){opts=opts||{};const maxIter=opts.maxIter||24;const rng=mulberry32(opts.seed||12345);k=Math.max(1,Math.min(k,n));const centers=new Float64Array(k*3);const dist2=(i,c)=>{const a=i*3,b=c*3,d0=points[a]-centers[b],d1=points[a+1]-centers[b+1],d2=points[a+2]-centers[b+2];return d0*d0+d1*d1+d2*d2;};let first=Math.floor(rng()*n);centers[0]=points[first*3];centers[1]=points[first*3+1];centers[2]=points[first*3+2];const dmin=new Float64Array(n).fill(Infinity);for(let c=1;c<k;c++){let sum=0;for(let i=0;i<n;i++){const d=dist2(i,c-1);if(d<dmin[i])dmin[i]=d;sum+=dmin[i];}let target=rng()*sum,acc=0,pick=n-1;for(let i=0;i<n;i++){acc+=dmin[i];if(acc>=target){pick=i;break;}}centers[c*3]=points[pick*3];centers[c*3+1]=points[pick*3+1];centers[c*3+2]=points[pick*3+2];}const labels=new Int32Array(n);const sumv=new Float64Array(k*3);const cnt=new Int32Array(k);for(let it=0;it<maxIter;it++){let changed=false;for(let i=0;i<n;i++){let best=0,bd=Infinity;for(let c=0;c<k;c++){const d=dist2(i,c);if(d<bd){bd=d;best=c;}}if(labels[i]!==best){labels[i]=best;changed=true;}}sumv.fill(0);cnt.fill(0);for(let i=0;i<n;i++){const c=labels[i],a=i*3,b=c*3;sumv[b]+=points[a];sumv[b+1]+=points[a+1];sumv[b+2]+=points[a+2];cnt[c]++;}for(let c=0;c<k;c++){if(cnt[c]>0){centers[c*3]=sumv[c*3]/cnt[c];centers[c*3+1]=sumv[c*3+1]/cnt[c];centers[c*3+2]=sumv[c*3+2]/cnt[c];}}if(!changed&&it>0)break;}return{labels,centers,counts:cnt,k};}
+function mergeAnchored(centers,counts,k,mergeDe){const mapping=new Int32Array(k);if(mergeDe<=0){for(let i=0;i<k;i++)mapping[i]=i;return mapping;}const order=Array.from({length:k},(_,i)=>i).sort((a,b)=>counts[b]-counts[a]);const kept=[];for(const c of order){let best=-1,bestDe=Infinity;for(const kc of kept){const d0=centers[c*3]-centers[kc*3],d1=centers[c*3+1]-centers[kc*3+1],d2=centers[c*3+2]-centers[kc*3+2];const de=Math.sqrt(d0*d0+d1*d1+d2*d2);if(de<bestDe){bestDe=de;best=kc;}}if(best>=0&&bestDe<mergeDe)mapping[c]=best;else{kept.push(c);mapping[c]=c;}}return mapping;}
+function segmentForeground(data,w,h){const bs=[];for(let x=0;x<w;x++){bs.push([data[x*4],data[x*4+1],data[x*4+2]]);const o=((h-1)*w+x)*4;bs.push([data[o],data[o+1],data[o+2]]);}for(let y=0;y<h;y++){let o=(y*w)*4;bs.push([data[o],data[o+1],data[o+2]]);o=(y*w+w-1)*4;bs.push([data[o],data[o+1],data[o+2]]);}const med=[0,1,2].map(ch=>{const arr=bs.map(p=>p[ch]).sort((a,b)=>a-b);return arr[arr.length>>1];});const tol=24;const isBg=i=>(Math.abs(data[i*4]-med[0])<=tol&&Math.abs(data[i*4+1]-med[1])<=tol&&Math.abs(data[i*4+2]-med[2])<=tol);const bg=new Uint8Array(w*h);const st=[];const push=i=>{if(!bg[i]&&isBg(i)){bg[i]=1;st.push(i);}};for(let x=0;x<w;x++){push(x);push((h-1)*w+x);}for(let y=0;y<h;y++){push(y*w);push(y*w+w-1);}while(st.length){const i=st.pop(),x=i%w,y=(i/w)|0;if(x>0)push(i-1);if(x<w-1)push(i+1);if(y>0)push(i-w);if(y<h-1)push(i+w);}const fg=new Uint8Array(w*h);for(let i=0;i<w*h;i++)fg[i]=bg[i]?0:1;return fg;}
+function toHex(rgb){return rgb.map(v=>Math.max(0,Math.min(255,v|0)).toString(16).padStart(2,'0').toUpperCase()).join('');}
+function hexToRgb(h){return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+function buildChart(data,w,h,params){
+  const grid=Math.max(16,Math.min(96,params.grid|0)),k=params.k|0,mergeDe=params.mergeDe,darkThr=params.darkThr;
+  const fg=segmentForeground(data,w,h);
+  let x0=w,y0=h,x1=0,y1=0,any=false;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(fg[y*w+x]){any=true;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+  if(!any)throw new Error("没有检测到主体，换一张干净底图试试");
+  x1++;y1++;const W=x1-x0,H=y1-y0;
+  let gw,gh;if(W>=H){gw=grid;gh=Math.max(1,Math.round(grid*H/W));}else{gh=grid;gw=Math.max(1,Math.round(grid*W/H));}
+  const cellFg=new Uint8Array(gw*gh),cellOutline=new Uint8Array(gw*gh),cellRGB=new Float64Array(gw*gh*3);
+  for(let j=0;j<gh;j++){const sy=y0+Math.floor(j*H/gh),ey=y0+Math.floor((j+1)*H/gh);
+    for(let i=0;i<gw;i++){const sx=x0+Math.floor(i*W/gw),ex=x0+Math.floor((i+1)*W/gw);
+      let fgc=0,darkc=0,tot=0,nr=0,sr=0,sg=0,sb=0;
+      for(let yy=sy;yy<ey;yy++)for(let xx=sx;xx<ex;xx++){tot++;const p=yy*w+xx;if(!fg[p])continue;fgc++;const r=data[p*4],g=data[p*4+1],b=data[p*4+2];if(r+g+b<150)darkc++;else{sr+=r;sg+=g;sb+=b;nr++;}}
+      const idx=j*gw+i;
+      if(tot>0&&fgc/tot>=0.5){cellFg[idx]=1;if(darkc/fgc>=darkThr)cellOutline[idx]=1;if(nr>0){cellRGB[idx*3]=sr/nr;cellRGB[idx*3+1]=sg/nr;cellRGB[idx*3+2]=sb/nr;}}
+    }}
+  const idxList=[];for(let idx=0;idx<gw*gh;idx++)if(cellFg[idx]&&!cellOutline[idx])idxList.push(idx);
+  const n=idxList.length;if(n===0)throw new Error("没有可聚类的颜色，描边保留调高一点");
+  const pts=new Float64Array(n*3);
+  for(let t=0;t<n;t++){const idx=idxList[t];const lab=rgb2lab(cellRGB[idx*3],cellRGB[idx*3+1],cellRGB[idx*3+2]);pts[t*3]=lab[0];pts[t*3+1]=lab[1];pts[t*3+2]=lab[2];}
+  const km=kmeans(pts,n,k,{seed:7});const mapping=mergeAnchored(km.centers,km.counts,km.k,mergeDe);
+  const groupOf=new Int32Array(km.k);for(let c=0;c<km.k;c++)groupOf[c]=mapping[c];
+  const clusterSum={};for(let t=0;t<n;t++){const c=km.labels[t],idx=idxList[t];if(!clusterSum[c])clusterSum[c]=[0,0,0,0];clusterSum[c][0]+=cellRGB[idx*3];clusterSum[c][1]+=cellRGB[idx*3+1];clusterSum[c][2]+=cellRGB[idx*3+2];clusterSum[c][3]++;}
+  const groupRep={};const groups=[...new Set(Array.from(groupOf))];
+  for(const g of groups){let big=-1,bc=-1;for(let c=0;c<km.k;c++)if(groupOf[c]===g){const cc=km.counts[c];if(cc>bc){bc=cc;big=c;}}const s=clusterSum[big]||[0,0,0,1];groupRep[g]=[Math.round(s[0]/Math.max(1,s[3])),Math.round(s[1]/Math.max(1,s[3])),Math.round(s[2]/Math.max(1,s[3]))];}
+  const cellColor=new Array(gw*gh).fill(null);
+  for(let t=0;t<n;t++){cellColor[idxList[t]]=groupRep[groupOf[km.labels[t]]];}
+  for(let idx=0;idx<gw*gh;idx++)if(cellOutline[idx])cellColor[idx]=[0,0,0];
+  const counts={};const cellKey=new Array(gw*gh).fill(null);
+  for(let idx=0;idx<gw*gh;idx++){if(!cellFg[idx])continue;const col=cellColor[idx];if(!col)continue;const key=toHex(col);counts[key]=(counts[key]||0)+1;cellKey[idx]=key;}
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);const labels=genLabels(sorted.length);const k2l={};sorted.forEach((e,i)=>k2l[e[0]]=labels[i]);
+  const colors=sorted.map(([key,count])=>({key,label:k2l[key],count,rgb:hexToRgb(key)}));
+  const total=sorted.reduce((s,e)=>s+e[1],0);
+  return{gw,gh,cellFg,cellKey,keyToLabel:k2l,colors,total};
+}
+
+/* ============ 出图（合成可保存的整张图）============ */
+function renderComposite(chart, thumbImg){
+  const {gw,gh,cellFg,cellKey,keyToLabel,colors,total}=chart;
+  const cell=26, pad=22;
+  const chartW=gw*cell, chartH=gh*cell;
+  // 面板：缩略图 + 汇总 + 色块清单
+  const thumbW=Math.min(150, Math.round(150*thumbImg.width/Math.max(1,thumbImg.height)));
+  const thumbH=Math.round(thumbW*thumbImg.height/Math.max(1,thumbImg.width));
+  const legendRowH=30, legendTop=pad+chartH+24+Math.max(thumbH,86)+34;
+  const contentW=Math.max(chartW, 420);
+  const totalH=legendTop+colors.length*legendRowH+pad;
+  const cv=document.createElement('canvas');
+  const ratio=Math.min(2, window.devicePixelRatio||1);
+  cv.width=(contentW+pad*2)*ratio; cv.height=totalH*ratio;
+  const ctx=cv.getContext('2d'); ctx.scale(ratio,ratio);
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,contentW+pad*2,totalH);
+
+  const ox=pad+Math.max(0,(contentW-chartW)/2), oy=pad;
+  // 画格
+  for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){
+    const idx=j*gw+i; if(!cellFg[idx])continue;
+    const key=cellKey[idx]; if(!key)continue;
+    const rgb=hexToRgb(key);
+    ctx.fillStyle=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    ctx.fillRect(ox+i*cell, oy+j*cell, cell, cell);
+  }
+  // 网格线
+  ctx.strokeStyle='rgba(150,150,160,.55)'; ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let i=0;i<=gw;i++){ctx.moveTo(ox+i*cell+.5,oy);ctx.lineTo(ox+i*cell+.5,oy+chartH);}
+  for(let j=0;j<=gh;j++){ctx.moveTo(ox,oy+j*cell+.5);ctx.lineTo(ox+chartW,oy+j*cell+.5);}
+  ctx.stroke();
+  // 字母
+  ctx.font='700 13px ui-monospace,Menlo,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){
+    const idx=j*gw+i; if(!cellFg[idx])continue;
+    const key=cellKey[idx]; if(!key)continue;
+    const rgb=hexToRgb(key);
+    ctx.fillStyle=(rgb[0]+rgb[1]+rgb[2]<300)?'#fff':'#241F2E';
+    ctx.fillText(keyToLabel[key], ox+i*cell+cell/2, oy+j*cell+cell/2+1);
+  }
+  // 分隔线
+  let y=oy+chartH+18;
+  ctx.strokeStyle='#E7E2F0'; ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(contentW+pad,y); ctx.stroke();
+  y+=18;
+  // 缩略图
+  ctx.strokeStyle='#D9D2EC'; ctx.strokeRect(pad,y,thumbW,thumbH);
+  ctx.drawImage(thumbImg, pad, y, thumbW, thumbH);
+  // 汇总
+  const tx=pad+thumbW+18; let ty=y+6;
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#241F2E';
+  ctx.font='800 20px ui-rounded,"PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('拼豆施工图', tx, ty+18); ty+=34;
+  ctx.font='600 15px ui-rounded,"PingFang SC","Microsoft YaHei",sans-serif'; ctx.fillStyle='#4a4458';
+  ctx.fillText(`成品尺寸：${gw} × ${gh} 格`, tx, ty+12); ty+=24;
+  ctx.fillText(`豆子总数：${total} 颗`, tx, ty+12); ty+=24;
+  ctx.fillText(`颜色种类：${colors.length} 种`, tx, ty+12);
+  // 清单标题
+  let ly=y+Math.max(thumbH,86)+18;
+  ctx.font='700 13px ui-rounded,"PingFang SC","Microsoft YaHei",sans-serif'; ctx.fillStyle='#8B8398';
+  ctx.fillText('颜色清单（豆色 / 编号 / 色值 / 数量）', pad, ly); ly+=22;
+  // 色珠清单
+  ctx.font='600 15px ui-monospace,Menlo,monospace';
+  colors.forEach((c,i)=>{
+    const ry=ly+i*legendRowH;
+    // 玻璃珠
+    const cx=pad+11, cy=ry+9, rad=10;
+    const grad=ctx.createRadialGradient(cx-3,cy-3,1,cx,cy,rad);
+    grad.addColorStop(0,'rgba(255,255,255,.85)');
+    grad.addColorStop(.25,`rgb(${c.rgb[0]},${c.rgb[1]},${c.rgb[2]})`);
+    grad.addColorStop(1,`rgb(${Math.max(0,c.rgb[0]-30)},${Math.max(0,c.rgb[1]-30)},${Math.max(0,c.rgb[2]-30)})`);
+    ctx.beginPath(); ctx.arc(cx,cy,rad,0,7); ctx.fillStyle=grad; ctx.fill();
+    ctx.lineWidth=1; ctx.strokeStyle='rgba(0,0,0,.12)'; ctx.stroke();
+    ctx.fillStyle='#241F2E'; ctx.textBaseline='middle';
+    ctx.fillText(`${c.label}   #${c.key}   ×${c.count}`, pad+30, cy+1);
+  });
+  ctx.textBaseline='alphabetic';
+  return cv;
+}
+
+/* ============ 交互 ============ */
+const $=id=>document.getElementById(id);
+let curImg=null, curGrid=48;
+
+const fileEl=$('file');
+$('drop').onclick=()=>fileEl.click();
+$('reChoose').onclick=()=>fileEl.click();
+fileEl.onchange=e=>{const f=e.target.files[0];if(f)loadFile(f);};
+
+function loadFile(f){
+  const url=URL.createObjectURL(f);
+  const img=new Image();
+  img.onload=()=>{
+    curImg=img;
+    $('previewImg').src=url;
+    $('drop').style.display='none';
+    $('preview').style.display='block';
+    $('go').disabled=false; $('go').textContent='生成施工图';
+    hideErr();
+  };
+  img.onerror=()=>showErr('这张图打不开，换一张试试（支持 PNG/JPG/SVG/WEBP）');
+  img.src=url;
+}
+
+// 颜色数
+$('k').oninput=e=>$('kVal').textContent=e.target.value;
+// 合并/描边
+$('merge').oninput=e=>$('mVal').textContent=e.target.value;
+$('dark').oninput=e=>$('dVal').textContent=e.target.value+'%';
+// 分辨率 chips
+$('gridChips').onclick=e=>{const c=e.target.closest('.chip');if(!c)return;[...$('gridChips').children].forEach(x=>x.classList.remove('on'));c.classList.add('on');curGrid=+c.dataset.v;};
+// 高级折叠
+$('advToggle').onclick=()=>{$('advToggle').classList.toggle('open');$('adv').classList.toggle('open');};
+
+function showErr(m){const e=$('err');e.textContent=m;e.style.display='block';}
+function hideErr(){$('err').style.display='none';}
+
+// 把图画到白底 canvas, 取 ImageData（长边 maxSide）
+function imgToData(img, maxSide){
+  let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+  if(!w||!h){w=900;h=900;}
+  const s=Math.min(1, maxSide/Math.max(w,h)); // 不放大
+  const W=Math.max(1,Math.round(w*s)), H=Math.max(1,Math.round(h*s));
+  const cv=$('work'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);   // 透明背景铺白
+  ctx.drawImage(img,0,0,W,H);
+  return {data:ctx.getImageData(0,0,W,H).data, w:W, h:H};
+}
+
+let lastCanvas=null;
+$('go').onclick=async()=>{
+  if(!curImg)return;
+  const btn=$('go'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>生成中…';
+  hideErr();
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); // 让转圈先画出来
+  try{
+    // 分辨率越高，取样底图越大（但有上限防止手机卡）
+    const maxSide=Math.min(1400, Math.max(700, curGrid*16));
+    const {data,w,h}=imgToData(curImg, maxSide);
+    const params={grid:curGrid, k:+$('k').value, mergeDe:+$('merge').value, darkThr:(+$('dark').value)/100};
+    const chart=buildChart(data,w,h,params);
+
+    // 缩略图（用同一张白底 work canvas 的内容）
+    const thumb=new Image();
+    thumb.src=$('work').toDataURL('image/png');
+    await new Promise(res=>{thumb.onload=res;});
+
+    const cv=renderComposite(chart, thumb);
+    lastCanvas=cv;
+    $('resultImg').src=cv.toDataURL('image/png');
+    $('stSize').textContent=`${chart.gw}×${chart.gh}`;
+    $('stTotal').textContent=chart.total;
+    $('stColors').textContent=chart.colors.length;
+    const lg=$('legend'); lg.innerHTML='';
+    chart.colors.forEach(c=>{
+      const d=document.createElement('div'); d.className='lg';
+      d.innerHTML=`<span class="bead" style="background:#${c.key}"></span><span class="t"><b>${c.label}</b> <small>#${c.key}</small> ×${c.count}</span>`;
+      lg.appendChild(d);
+    });
+    $('result').style.display='block';
+    $('result').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(err){
+    showErr(err.message||'生成失败，换张图或调整参数再试');
+  }finally{
+    btn.disabled=false; btn.textContent='重新生成';
+  }
+};
+
+// 保存
+$('btnSave').onclick=()=>{
+  if(!lastCanvas)return;
+  lastCanvas.toBlob(blob=>{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='拼豆施工图.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  },'image/png');
+};
+// 分享
+$('btnShare').onclick=async()=>{
+  if(!lastCanvas)return;
+  lastCanvas.toBlob(async blob=>{
+    const file=new File([blob],'拼豆施工图.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'拼豆施工图',text:'我做的拼豆图纸~'});}
+      catch(e){}
+    }else{
+      showErr('当前环境不支持直接分享（多见于本地直接打开文件）。可先「保存图片」，或把本页放到网址上打开即可分享。');
+    }
+  },'image/png');
+};
+
+// 内联 manifest，便于「添加到主屏幕」
+try{
+  const mani={name:'拼豆施工图',short_name:'拼豆图',display:'standalone',background_color:'#F3F1F7',theme_color:'#F3F1F7',icons:[]};
+  const blob=new Blob([JSON.stringify(mani)],{type:'application/manifest+json'});
+  const link=document.createElement('link'); link.rel='manifest'; link.href=URL.createObjectURL(blob);
+  document.head.appendChild(link);
+}catch(e){}
+</script>
+</body>
+</html>
