@@ -90,6 +90,14 @@
   .adv{display:none;padding-top:12px;}
   .adv.open{display:block;}
 
+  /* 开关 */
+  .switch{position:relative;display:inline-block;width:48px;height:28px;flex:none;}
+  .switch input{opacity:0;width:0;height:0;}
+  .switch .sl{position:absolute;cursor:pointer;inset:0;background:#D6CEE8;border-radius:28px;transition:.2s;}
+  .switch .sl::before{content:"";position:absolute;height:22px;width:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+  .switch input:checked + .sl{background:var(--grape);}
+  .switch input:checked + .sl::before{transform:translateX(20px);}
+
   /* 生成按钮 */
   .go{width:100%;border:none;border-radius:14px;padding:16px;font-size:16px;font-weight:800;
     color:#fff;background:linear-gradient(135deg,var(--grape),var(--grape-d));
@@ -125,6 +133,8 @@
 
   .err{display:none;background:#FFF0F4;color:#C2185B;border:1px solid #F7C9DA;
     border-radius:12px;padding:12px 14px;font-size:13px;font-weight:600;margin-bottom:14px;}
+  .note{display:none;background:#F1ECFF;color:#5a45a8;border:1px solid #DDD2F5;
+    border-radius:12px;padding:11px 14px;font-size:12.5px;font-weight:600;margin-bottom:14px;line-height:1.5;}
   footer{text-align:center;font-size:11px;color:var(--muted);padding:8px 0 4px;}
   footer b{color:var(--grape);}
   .a2hs{font-size:11px;color:var(--muted);text-align:center;margin-top:2px;}
@@ -139,6 +149,7 @@
 <div class="wrap">
 
   <div class="err" id="err"></div>
+  <div class="note" id="note"></div>
 
   <!-- 选图 -->
   <div class="card">
@@ -168,13 +179,13 @@
     <div class="row">
       <div class="top"><span class="lab">分辨率（成品格子数）</span></div>
       <div class="chips" id="gridChips">
+        <div class="chip" data-v="24">24</div>
         <div class="chip" data-v="32">32</div>
         <div class="chip on" data-v="48">48</div>
         <div class="chip" data-v="64">64</div>
-        <div class="chip" data-v="80">80</div>
         <div class="chip" data-v="96">96</div>
       </div>
-      <div class="hint">按长边算 · 越大越精细、生成越慢（手机建议 48–64）</div>
+      <div class="hint">按长边算 · 越大越精细、生成越慢 · ≤32 为低分辨率（自动启用传神增强）</div>
     </div>
 
     <div class="adv-toggle" id="advToggle"><span class="arrow">▸</span> 高级选项</div>
@@ -188,6 +199,13 @@
         <div class="top"><span class="lab">描边保留</span><span class="val" id="dVal">30%</span></div>
         <input type="range" id="dark" min="10" max="60" value="30">
         <div class="hint">黑色描边/细线的保留程度 · 调小→保留更多黑边</div>
+      </div>
+      <div class="row" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <span class="lab">传神增强</span>
+          <div class="hint" style="margin-top:2px;">低分辨率(≤32)下抢救眉眼鼻嘴等小特征，更抓神韵</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="vivid" checked><span class="sl"></span></label>
       </div>
     </div>
   </div>
@@ -231,9 +249,24 @@ function mergeAnchored(centers,counts,k,mergeDe){const mapping=new Int32Array(k)
 function segmentForeground(data,w,h){const bs=[];for(let x=0;x<w;x++){bs.push([data[x*4],data[x*4+1],data[x*4+2]]);const o=((h-1)*w+x)*4;bs.push([data[o],data[o+1],data[o+2]]);}for(let y=0;y<h;y++){let o=(y*w)*4;bs.push([data[o],data[o+1],data[o+2]]);o=(y*w+w-1)*4;bs.push([data[o],data[o+1],data[o+2]]);}const med=[0,1,2].map(ch=>{const arr=bs.map(p=>p[ch]).sort((a,b)=>a-b);return arr[arr.length>>1];});const tol=24;const isBg=i=>(Math.abs(data[i*4]-med[0])<=tol&&Math.abs(data[i*4+1]-med[1])<=tol&&Math.abs(data[i*4+2]-med[2])<=tol);const bg=new Uint8Array(w*h);const st=[];const push=i=>{if(!bg[i]&&isBg(i)){bg[i]=1;st.push(i);}};for(let x=0;x<w;x++){push(x);push((h-1)*w+x);}for(let y=0;y<h;y++){push(y*w);push(y*w+w-1);}while(st.length){const i=st.pop(),x=i%w,y=(i/w)|0;if(x>0)push(i-1);if(x<w-1)push(i+1);if(y>0)push(i-w);if(y<h-1)push(i+w);}const fg=new Uint8Array(w*h);for(let i=0;i<w*h;i++)fg[i]=bg[i]?0:1;return fg;}
 function toHex(rgb){return rgb.map(v=>Math.max(0,Math.min(255,v|0)).toString(16).padStart(2,'0').toUpperCase()).join('');}
 function hexToRgb(h){return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+// 判断是否"卡通/平涂"风格：主色高度集中 且 大面积平整
+function detectFlat(data,w,h,fg){
+  const hist=new Map();let tot=0;
+  for(let i=0;i<w*h;i++){if(fg&&!fg[i])continue;const r=data[i*4]>>3,g=data[i*4+1]>>3,b=data[i*4+2]>>3;const key=(r<<10)|(g<<5)|b;hist.set(key,(hist.get(key)||0)+1);tot++;}
+  const vals=[...hist.values()].sort((a,b)=>b-a);let top=0;for(let i=0;i<Math.min(8,vals.length);i++)top+=vals[i];
+  const top8=top/Math.max(1,tot),distinct=hist.size;
+  let flat=0,cnt=0;
+  for(let y=0;y<h;y++)for(let x=0;x<w-1;x++){const p=y*w+x,q=p+1;if(fg&&(!fg[p]||!fg[q]))continue;const d=Math.abs(data[p*4]-data[q*4])+Math.abs(data[p*4+1]-data[q*4+1])+Math.abs(data[p*4+2]-data[q*4+2]);if(d<=6)flat++;cnt++;}
+  const flatRatio=flat/Math.max(1,cnt);
+  return top8>=0.85 && (flatRatio>=0.6 || distinct<=60);
+}
 function buildChart(data,w,h,params){
   const grid=Math.max(16,Math.min(96,params.grid|0)),k=params.k|0,mergeDe=params.mergeDe,darkThr=params.darkThr;
+  const S=params.vividStrength||1.6;
   const fg=segmentForeground(data,w,h);
+  // 传神仅低分辨率启用；若自动判为卡通/平涂且用户未手动强制，则自动关闭
+  let vivid=params.vivid&&grid<=32, cartoon=false;
+  if(vivid){cartoon=detectFlat(data,w,h,fg);if(cartoon&&!params.vividForce)vivid=false;}
   let x0=w,y0=h,x1=0,y1=0,any=false;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(fg[y*w+x]){any=true;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
   if(!any)throw new Error("没有检测到主体，换一张干净底图试试");
@@ -242,10 +275,26 @@ function buildChart(data,w,h,params){
   const cellFg=new Uint8Array(gw*gh),cellOutline=new Uint8Array(gw*gh),cellRGB=new Float64Array(gw*gh*3);
   for(let j=0;j<gh;j++){const sy=y0+Math.floor(j*H/gh),ey=y0+Math.floor((j+1)*H/gh);
     for(let i=0;i<gw;i++){const sx=x0+Math.floor(i*W/gw),ex=x0+Math.floor((i+1)*W/gw);
-      let fgc=0,darkc=0,tot=0,nr=0,sr=0,sg=0,sb=0;
-      for(let yy=sy;yy<ey;yy++)for(let xx=sx;xx<ex;xx++){tot++;const p=yy*w+xx;if(!fg[p])continue;fgc++;const r=data[p*4],g=data[p*4+1],b=data[p*4+2];if(r+g+b<150)darkc++;else{sr+=r;sg+=g;sb+=b;nr++;}}
+      let mr=0,mg=0,mb=0,nn=0,fgc=0,tot=0;const px=[];
+      for(let yy=sy;yy<ey;yy++)for(let xx=sx;xx<ex;xx++){tot++;const p=yy*w+xx;if(!fg[p])continue;fgc++;const r=data[p*4],g=data[p*4+1],b=data[p*4+2];if(vivid)px.push(p);mr+=r;mg+=g;mb+=b;nn++;}
       const idx=j*gw+i;
-      if(tot>0&&fgc/tot>=0.5){cellFg[idx]=1;if(darkc/fgc>=darkThr)cellOutline[idx]=1;if(nr>0){cellRGB[idx*3]=sr/nr;cellRGB[idx*3+1]=sg/nr;cellRGB[idx*3+2]=sb/nr;}}
+      if(!(tot>0&&fgc/tot>=0.5))continue;
+      cellFg[idx]=1;mr/=nn;mg/=nn;mb/=nn;
+      // 绝对黑描边（沿用）
+      let darkAbs=0;for(let yy=sy;yy<ey;yy++)for(let xx=sx;xx<ex;xx++){const p=yy*w+xx;if(!fg[p])continue;if(data[p*4]+data[p*4+1]+data[p*4+2]<150)darkAbs++;}
+      if(darkAbs/fgc>=darkThr){cellOutline[idx]=1;continue;}
+      if(!vivid){cellRGB[idx*3]=mr;cellRGB[idx*3+1]=mg;cellRGB[idx*3+2]=mb;continue;}
+      // 传神：招1 显著性加权 + 招2 特征抢格
+      const mluma=mr+mg+mb;let sr=0,sg=0,sb=0,sw=0,fr=0,fg2=0,fb=0,fn=0;
+      for(const p of px){const r=data[p*4],g=data[p*4+1],b=data[p*4+2];
+        const dev=Math.sqrt((r-mr)**2+(g-mg)**2+(b-mb)**2)/255;
+        const dark=Math.max(0,(500-(r+g+b))/500);
+        const wgt=1+S*(dev*2.0+dark*1.4);
+        sr+=r*wgt;sg+=g*wgt;sb+=b*wgt;sw+=wgt;
+        if((r+g+b)<mluma-120){fr+=r;fg2+=g;fb+=b;fn++;}
+      }
+      if(fn>0&&fn/fgc>=0.12){cellRGB[idx*3]=fr/fn;cellRGB[idx*3+1]=fg2/fn;cellRGB[idx*3+2]=fb/fn;}
+      else{cellRGB[idx*3]=sr/sw;cellRGB[idx*3+1]=sg/sw;cellRGB[idx*3+2]=sb/sw;}
     }}
   const idxList=[];for(let idx=0;idx<gw*gh;idx++)if(cellFg[idx]&&!cellOutline[idx])idxList.push(idx);
   const n=idxList.length;if(n===0)throw new Error("没有可聚类的颜色，描边保留调高一点");
@@ -264,7 +313,7 @@ function buildChart(data,w,h,params){
   const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);const labels=genLabels(sorted.length);const k2l={};sorted.forEach((e,i)=>k2l[e[0]]=labels[i]);
   const colors=sorted.map(([key,count])=>({key,label:k2l[key],count,rgb:hexToRgb(key)}));
   const total=sorted.reduce((s,e)=>s+e[1],0);
-  return{gw,gh,cellFg,cellKey,keyToLabel:k2l,colors,total};
+  return{gw,gh,cellFg,cellKey,keyToLabel:k2l,colors,total,cartoon,vividApplied:vivid};
 }
 
 /* ============ 出图（合成可保存的整张图）============ */
@@ -380,9 +429,14 @@ $('dark').oninput=e=>$('dVal').textContent=e.target.value+'%';
 $('gridChips').onclick=e=>{const c=e.target.closest('.chip');if(!c)return;[...$('gridChips').children].forEach(x=>x.classList.remove('on'));c.classList.add('on');curGrid=+c.dataset.v;};
 // 高级折叠
 $('advToggle').onclick=()=>{$('advToggle').classList.toggle('open');$('adv').classList.toggle('open');};
+// 记录用户是否手动拨过"传神"开关（手动开启则不再自动关闭）
+let vividTouched=false;
+$('vivid').addEventListener('change',()=>{vividTouched=true;});
 
 function showErr(m){const e=$('err');e.textContent=m;e.style.display='block';}
 function hideErr(){$('err').style.display='none';}
+function showNote(m){const e=$('note');e.innerHTML=m;e.style.display='block';}
+function hideNote(){$('note').style.display='none';}
 
 // 把图画到白底 canvas, 取 ImageData（长边 maxSide）
 function imgToData(img, maxSide){
@@ -401,14 +455,19 @@ let lastCanvas=null;
 $('go').onclick=async()=>{
   if(!curImg)return;
   const btn=$('go'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>生成中…';
-  hideErr();
+  hideErr(); hideNote();
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); // 让转圈先画出来
   try{
     // 分辨率越高，取样底图越大（但有上限防止手机卡）
     const maxSide=Math.min(1400, Math.max(700, curGrid*16));
     const {data,w,h}=imgToData(curImg, maxSide);
-    const params={grid:curGrid, k:+$('k').value, mergeDe:+$('merge').value, darkThr:(+$('dark').value)/100};
+    const params={grid:curGrid, k:+$('k').value, mergeDe:+$('merge').value, darkThr:(+$('dark').value)/100, vivid:$('vivid').checked, vividForce:(vividTouched&&$('vivid').checked)};
     const chart=buildChart(data,w,h,params);
+    // 自动识别到卡通/平涂并已自动关闭传神 -> 同步开关状态并提示
+    if(chart.cartoon && !chart.vividApplied && $('vivid').checked){
+      $('vivid').checked=false;
+      showNote('🖌 检测到<b>卡通/平涂</b>风格，已自动关闭「传神增强」以免大色块变花。<br>若想强制开启：到高级选项打开开关后再点生成。');
+    }
 
     // 缩略图（用同一张白底 work canvas 的内容）
     const thumb=new Image();
