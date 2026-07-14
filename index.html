@@ -110,6 +110,13 @@
   .preview img{max-width:100%;max-height:200px;border-radius:12px;border:1px solid var(--line);background:#fff;}
   .preview .re{margin-top:10px;font-size:13px;color:var(--grape);font-weight:700;}
   .cutbox{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);}
+  .strength-label{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:7px;}
+  .seg{display:flex;gap:6px;}
+  .seg button{flex:1;padding:9px 0;border-radius:10px;border:1.5px solid var(--line);
+    background:#fff;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;transition:.12s;}
+  .seg button.on{border-color:var(--grape);color:#fff;background:linear-gradient(135deg,var(--grape),var(--grape-d));
+    box-shadow:0 3px 8px rgba(106,75,214,.28);}
+  .seg button:active{transform:translateY(1px);}
 
   /* 控件 */
   .row{margin-bottom:16px;}
@@ -245,9 +252,17 @@
         <label class="switch"><input type="checkbox" id="cutout" checked><span class="sl"></span></label>
       </div>
       <div class="row" id="cutRow" style="margin-bottom:0;">
-        <div class="pickbar">
+        <div class="strength-label">抠图力度</div>
+        <div class="seg" id="cutLevel">
+          <button type="button" data-t="9">温和</button>
+          <button type="button" data-t="11">标准</button>
+          <button type="button" class="on" data-t="13">较强</button>
+          <button type="button" data-t="17">强力</button>
+        </div>
+        <div class="hint" style="margin-top:6px;">背景没洗干净就调强；主体被啃掉就调弱</div>
+        <div class="pickbar" style="margin-top:10px;">
           <button type="button" id="pickBtn">✛ 点选背景</button>
-          <span class="pickinfo" id="pickInfo">背景没洗干净？在预览图上点几处背景，再点生成</span>
+          <span class="pickinfo" id="pickInfo">还洗不净？在预览图上点几处背景，再点生成</span>
         </div>
       </div>
     </div>
@@ -631,7 +646,7 @@ function buildChart(data,w,h,params){
   // 抠图：可关闭；可传背景种子（点选背景）
   const fg = (params.cutout===false)
     ? new Uint8Array(w*h).fill(1)
-    : segmentForeground(data,w,h,{seeds:params.seeds});
+    : segmentForeground(data,w,h,{seeds:params.seeds, deTol:params.deTol});
   // 传神增强已下线；保留卡通/平涂自动检测（仅用于提示，不改变出图）
   let vivid=false, cartoon=false;
   if(grid<=32) cartoon=detectFlat(data,w,h,fg);
@@ -964,6 +979,13 @@ $('advToggle').onclick=()=>{$('advToggle').classList.toggle('open');$('adv').cla
 $('cutout').addEventListener('change',e=>{
   $('cutRow').style.display = e.target.checked ? '' : 'none';
 });
+// 抠图力度 4 档（deTol），默认"较强"=13（与原设定一致）
+let cutTol=13;
+$('cutLevel').onclick=e=>{
+  const btn=e.target.closest('button'); if(!btn)return;
+  [...$('cutLevel').children].forEach(x=>x.classList.remove('on'));
+  btn.classList.add('on'); cutTol=+btn.dataset.t;
+};
 let picking=false;
 let bgSeeds=[];             // 归一化坐标 [[u,v],...]
 function renderDots(){
@@ -1035,7 +1057,7 @@ $('go').onclick=async()=>{
     const {data,w,h}=imgToData(curImg, maxSide);
     const seeds = bgSeeds.map(([u,v])=>[Math.round(u*w), Math.round(v*h)]);
     const params={grid:curGrid, k:+$('k').value, mergeDe:+$('merge').value, darkThr:(+$('dark').value)/100,
-      cutout:$('cutout').checked, seeds:seeds.length?seeds:null};
+      cutout:$('cutout').checked, seeds:seeds.length?seeds:null, deTol:cutTol};
     let chart=buildChart(data,w,h,params);
     const palKey=$('palette').value;
     chart=snapToPalette(chart, palKey);
