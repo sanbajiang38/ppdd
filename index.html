@@ -63,10 +63,12 @@
   header{display:flex;align-items:center;gap:10px;padding:18px 16px 14px;max-width:520px;margin:0 auto;}
   .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--grape),var(--candy));
     position:relative;box-shadow:var(--shadow);flex:none;}
-  .logo::after{content:"";position:absolute;inset:0;border-radius:10px;
+  .logo{border-radius:50%;}
+  .logo::after{content:"";position:absolute;inset:0;border-radius:50%;
     background:radial-gradient(circle at 30% 26%, rgba(255,255,255,.85), transparent 42%);}
-  .brand{font-weight:800;font-size:19px;letter-spacing:.5px;}
-  .brand small{display:block;font-weight:600;font-size:11px;color:var(--muted);letter-spacing:2px;}
+  .logo::before{content:"";position:absolute;inset:0;margin:auto;width:9px;height:9px;z-index:1;
+    border-radius:50%;background:rgba(90,20,90,.4);}
+  .brand{font-weight:800;font-size:20px;letter-spacing:2.5px;}
 
   /* 署名：一枚串在名字前的拼豆 */
   .byline{margin-left:auto;display:flex;align-items:center;gap:6px;
@@ -84,11 +86,18 @@
     .byline{font-size:11.5px;padding:5px 9px 5px 7px;}
   }
 
-  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
-    padding:16px;margin-bottom:14px;border:1px solid var(--line);}
-  .card h2{margin:0 0 12px;font-size:14px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;}
-  .card h2 .n{width:20px;height:20px;border-radius:7px;background:var(--board);color:var(--grape);
-    font-size:12px;font-weight:800;display:grid;place-items:center;}
+  .card{background:var(--card);border-radius:var(--radius);
+    box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.9);
+    padding:18px;margin-bottom:14px;border:1px solid var(--line);}
+  .card h2{margin:0 0 12px;font-size:15px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:9px;}
+  .card h2 .n{width:26px;height:26px;flex:none;position:relative;color:#fff;font-size:13px;font-weight:900;
+    display:grid;place-items:center;border-radius:46% 54% 52% 48%/50% 46% 54% 50%;
+    transform:rotate(-6deg);box-shadow:0 3px 0 rgba(0,0,0,.12);}
+  .card h2 .n::after{content:"";position:absolute;top:3px;left:5px;width:7px;height:5px;border-radius:50%;
+    background:rgba(255,255,255,.65);transform:rotate(-20deg);}
+  .card:nth-of-type(1) h2 .n{background:linear-gradient(150deg,#FF9F45,#F0762E);}
+  .card:nth-of-type(2) h2 .n{background:linear-gradient(150deg,#6FC7FF,#3E8FE0);}
+  .card:nth-of-type(3) h2 .n,#result .card h2 .n{background:linear-gradient(150deg,#FF7FC4,#E0459A);}
 
   /* 选图 */
   .drop{border:2px dashed #E0C9A6;border-radius:14px;background:#FFFBF3;
@@ -100,6 +109,7 @@
   .preview{display:none;text-align:center;}
   .preview img{max-width:100%;max-height:200px;border-radius:12px;border:1px solid var(--line);background:#fff;}
   .preview .re{margin-top:10px;font-size:13px;color:var(--grape);font-weight:700;}
+  .cutbox{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);}
 
   /* 控件 */
   .row{margin-bottom:16px;}
@@ -203,8 +213,8 @@
 <body>
 <header>
   <div class="logo"></div>
-  <div class="brand">拼豆施工图<small>PPDD GENERATOR</small></div>
-  <div class="byline"><span class="bead-dot"></span>四喜lsx</div>
+  <div class="brand">拼豆施工图</div>
+  <div class="byline"><span class="bead-dot"></span>by 四喜</div>
 </header>
 
 <div class="wrap">
@@ -225,6 +235,22 @@
       <div class="re" id="reChoose">↻ 重新选择</div>
     </div>
     <input type="file" id="file" accept="image/*,.svg" hidden>
+
+    <div class="cutbox" id="cutbox">
+      <div class="row" style="display:flex;justify-content:space-between;align-items:center;margin:0;">
+        <div>
+          <span class="lab">抠掉背景</span>
+          <div class="hint" style="margin-top:2px;">只拼主体 · 关掉则连背景一起拼</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="cutout" checked><span class="sl"></span></label>
+      </div>
+      <div class="row" id="cutRow" style="margin-bottom:0;">
+        <div class="pickbar">
+          <button type="button" id="pickBtn">✛ 点选背景</button>
+          <span class="pickinfo" id="pickInfo">背景没洗干净？在预览图上点几处背景，再点生成</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 参数 -->
@@ -246,29 +272,12 @@
         <div class="chip" data-v="64">64</div>
         <div class="chip" data-v="96">96</div>
       </div>
-      <div class="hint">按长边算 · 越大越精细、生成越慢 · ≤32 为低分辨率（自动启用传神增强）</div>
+      <div class="hint">按长边算 · 越大越精细、生成越慢（手机建议 48–64）</div>
     </div>
 
     <div class="adv-toggle" id="advToggle"><span class="arrow">▸</span> 高级选项</div>
     <div class="adv" id="adv">
 
-      <div class="row" style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <span class="lab">抠掉背景</span>
-          <div class="hint" style="margin-top:2px;">只拼主体 · 关掉则连背景一起拼</div>
-        </div>
-        <label class="switch"><input type="checkbox" id="cutout" checked><span class="sl"></span></label>
-      </div>
-
-      <div class="row" id="cutRow">
-        <div class="top"><span class="lab">背景容差</span><span class="val" id="tolVal">12</span></div>
-        <input type="range" id="tol" min="4" max="30" value="12">
-        <div class="hint">背景洗不干净就调大；主体被啃掉就调小</div>
-        <div class="pickbar">
-          <button type="button" id="pickBtn">✛ 点选背景</button>
-          <span class="pickinfo" id="pickInfo">复杂/渐变背景时，点图上几处背景色</span>
-        </div>
-      </div>
       <div class="row">
         <div class="top"><span class="lab">画面风格</span></div>
         <select id="style">
@@ -294,13 +303,6 @@
           <div class="hint">黑色描边/细线的保留程度 · 调小→保留更多黑边</div>
         </div>
       </div>
-      <div class="row" style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <span class="lab">传神增强</span>
-          <div class="hint" style="margin-top:2px;">低分辨率(≤32)下抢救眉眼鼻嘴等小特征 · 适合写实人像，卡通图不建议开</div>
-        </div>
-        <label class="switch"><input type="checkbox" id="vivid"><span class="sl"></span></label>
-      </div>
 
       <div class="row" style="display:flex;justify-content:space-between;align-items:center;">
         <div>
@@ -309,6 +311,7 @@
         </div>
         <label class="switch"><input type="checkbox" id="mirror"><span class="sl"></span></label>
       </div>
+
 
       <div class="row">
         <div class="top"><span class="lab">色号表</span></div>
@@ -348,7 +351,7 @@
 
   <footer>
     全部在你的手机本地生成，图片不会上传<br>
-    <span class="sig">四喜lsx · 拼豆施工图</span><br>
+    <span class="sig">by 四喜</span><br>
     <span class="a2hs">想当 App 用？浏览器菜单选「添加到主屏幕」</span>
   </footer>
 </div>
@@ -362,47 +365,164 @@ function rgb2lab(r,g,b){let R=r/255,G=g/255,B=b/255;R=R>0.04045?Math.pow((R+0.05
 function mulberry32(s){return function(){s|=0;s=(s+0x6D2B79F5)|0;let t=Math.imul(s^(s>>>15),1|s);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
 function kmeans(points,n,k,opts){opts=opts||{};const maxIter=opts.maxIter||24;const rng=mulberry32(opts.seed||12345);k=Math.max(1,Math.min(k,n));const centers=new Float64Array(k*3);const dist2=(i,c)=>{const a=i*3,b=c*3,d0=points[a]-centers[b],d1=points[a+1]-centers[b+1],d2=points[a+2]-centers[b+2];return d0*d0+d1*d1+d2*d2;};let first=Math.floor(rng()*n);centers[0]=points[first*3];centers[1]=points[first*3+1];centers[2]=points[first*3+2];const dmin=new Float64Array(n).fill(Infinity);for(let c=1;c<k;c++){let sum=0;for(let i=0;i<n;i++){const d=dist2(i,c-1);if(d<dmin[i])dmin[i]=d;sum+=dmin[i];}let target=rng()*sum,acc=0,pick=n-1;for(let i=0;i<n;i++){acc+=dmin[i];if(acc>=target){pick=i;break;}}centers[c*3]=points[pick*3];centers[c*3+1]=points[pick*3+1];centers[c*3+2]=points[pick*3+2];}const labels=new Int32Array(n);const sumv=new Float64Array(k*3);const cnt=new Int32Array(k);for(let it=0;it<maxIter;it++){let changed=false;for(let i=0;i<n;i++){let best=0,bd=Infinity;for(let c=0;c<k;c++){const d=dist2(i,c);if(d<bd){bd=d;best=c;}}if(labels[i]!==best){labels[i]=best;changed=true;}}sumv.fill(0);cnt.fill(0);for(let i=0;i<n;i++){const c=labels[i],a=i*3,b=c*3;sumv[b]+=points[a];sumv[b+1]+=points[a+1];sumv[b+2]+=points[a+2];cnt[c]++;}for(let c=0;c<k;c++){if(cnt[c]>0){centers[c*3]=sumv[c*3]/cnt[c];centers[c*3+1]=sumv[c*3+1]/cnt[c];centers[c*3+2]=sumv[c*3+2]/cnt[c];}}if(!changed&&it>0)break;}return{labels,centers,counts:cnt,k};}
 function mergeAnchored(centers,counts,k,mergeDe){const mapping=new Int32Array(k);if(mergeDe<=0){for(let i=0;i<k;i++)mapping[i]=i;return mapping;}const order=Array.from({length:k},(_,i)=>i).sort((a,b)=>counts[b]-counts[a]);const kept=[];for(const c of order){let best=-1,bestDe=Infinity;for(const kc of kept){const d0=centers[c*3]-centers[kc*3],d1=centers[c*3+1]-centers[kc*3+1],d2=centers[c*3+2]-centers[kc*3+2];const de=Math.sqrt(d0*d0+d1*d1+d2*d2);if(de<bestDe){bestDe=de;best=kc;}}if(best>=0&&bestDe<mergeDe)mapping[c]=best;else{kept.push(c);mapping[c]=c;}}return mapping;}
+// 块级背景分割：对照片纹理背景(草地等)更稳。
+// 6x6 块均色建模背景 + 块级泛洪 + 深色降权/邻接回收/半径约束(保护头发不被草影吃掉)
+function rgb2lab(r,g,b){let R=r/255,G=g/255,B=b/255;
+R=R>0.04045?Math.pow((R+0.055)/1.055,2.4):R/12.92;G=G>0.04045?Math.pow((G+0.055)/1.055,2.4):G/12.92;B=B>0.04045?Math.pow((B+0.055)/1.055,2.4):B/12.92;
+let X=(R*0.4124564+G*0.3575761+B*0.1804375)/0.95047,Y=(R*0.2126729+G*0.7151522+B*0.0721750),Z=(R*0.0193339+G*0.1191920+B*0.9503041)/1.08883;
+const f=t=>t>0.008856?Math.cbrt(t):(903.3*t+16)/116;const fx=f(X),fy=f(Y),fz=f(Z);
+return[116*fy-16,500*(fx-fy),200*(fy-fz)];}
+function _kmB(pts,k,iters){
+  const n=pts.length/3;k=Math.min(k,n);
+  const cen=new Float64Array(k*3);
+  for(let c=0;c<k;c++){const i=Math.floor(n*c/k);cen[c*3]=pts[i*3];cen[c*3+1]=pts[i*3+1];cen[c*3+2]=pts[i*3+2];}
+  const lb=new Int32Array(n);
+  for(let it=0;it<iters;it++){
+    for(let i=0;i<n;i++){let b=0,bd=1e18;
+      for(let c=0;c<k;c++){const dd=(pts[i*3]-cen[c*3])**2+(pts[i*3+1]-cen[c*3+1])**2+(pts[i*3+2]-cen[c*3+2])**2;if(dd<bd){bd=dd;b=c;}}
+      lb[i]=b;}
+    const s=new Float64Array(k*3),cnt=new Int32Array(k);
+    for(let i=0;i<n;i++){const c=lb[i];s[c*3]+=pts[i*3];s[c*3+1]+=pts[i*3+1];s[c*3+2]+=pts[i*3+2];cnt[c]++;}
+    for(let c=0;c<k;c++)if(cnt[c]){cen[c*3]=s[c*3]/cnt[c];cen[c*3+1]=s[c*3+1]/cnt[c];cen[c*3+2]=s[c*3+2]/cnt[c];}
+  }
+  return cen;
+}
+// 块级分割: cellSize 像素一块, 块均色建模 + 块级泛洪(无逐像素边缘干扰)
 function segmentForeground(data,w,h,opts){
   opts=opts||{};
-  const deTol = opts.deTol!=null ? opts.deTol : 12;     // LAB 感知容差
-  const edgeTol = opts.edgeTol!=null ? opts.edgeTol : 6; // 边缘屏障(遇强边停)
-  const N=w*h;
-
-  // 预计算 LAB
-  const lab=new Float32Array(N*3);
-  for(let i=0;i<N;i++){const L=rgb2lab(data[i*4],data[i*4+1],data[i*4+2]);lab[i*3]=L[0];lab[i*3+1]=L[1];lab[i*3+2]=L[2];}
-  const dl=(a,b)=>Math.sqrt((lab[a*3]-lab[b*3])**2+(lab[a*3+1]-lab[b*3+1])**2+(lab[a*3+2]-lab[b*3+2])**2);
-  // 边缘梯度
-  const grad=new Float32Array(N);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;let g=0;
-    if(x<w-1)g=Math.max(g,dl(i,i+1)); if(y<h-1)g=Math.max(g,dl(i,i+w)); grad[i]=g;}
-
-  // 种子：用户点选的背景点；没有则用四角+四边中点
-  let seeds = (opts.seeds&&opts.seeds.length) ? opts.seeds.slice() : [
-    [0,0],[w-1,0],[0,h-1],[w-1,h-1],
-    [w>>1,0],[w>>1,h-1],[0,h>>1],[w-1,h>>1]
-  ];
-  seeds = seeds.map(([x,y])=>[Math.max(0,Math.min(w-1,x|0)),Math.max(0,Math.min(h-1,y|0))]);
-  const seedLab=seeds.map(([x,y])=>{const i=y*w+x;return [lab[i*3],lab[i*3+1],lab[i*3+2]];});
-  const near=i=>{
-    for(const c of seedLab){
-      const d=Math.sqrt((lab[i*3]-c[0])**2+(lab[i*3+1]-c[1])**2+(lab[i*3+2]-c[2])**2);
-      if(d<=deTol)return true;
-    }
-    return false;
-  };
-
-  const bg=new Uint8Array(N); const st=[];
-  for(const [x,y] of seeds){const i=y*w+x; if(!bg[i]){bg[i]=1;st.push(i);}}
-  while(st.length){
-    const i=st.pop(), x=i%w, y=(i/w)|0;
-    const t=j=>{ if(bg[j])return; if(grad[j]>edgeTol)return; if(!near(j))return; bg[j]=1; st.push(j); };
-    if(x>0)t(i-1); if(x<w-1)t(i+1); if(y>0)t(i-w); if(y<h-1)t(i+w);
+  const cs=opts.cellSize||6;
+  const deTol=opts.deTol!=null?opts.deTol:13;
+  const gw=Math.ceil(w/cs), gh=Math.ceil(h/cs);
+  // 块均色 lab
+  const blab=new Float32Array(gw*gh*3);
+  for(let gy=0;gy<gh;gy++)for(let gx=0;gx<gw;gx++){
+    let sr=0,sg=0,sb=0,n=0;
+    for(let y=gy*cs;y<Math.min(h,(gy+1)*cs);y++)for(let x=gx*cs;x<Math.min(w,(gx+1)*cs);x++){
+      const p=(y*w+x)*4;sr+=data[p];sg+=data[p+1];sb+=data[p+2];n++;}
+    const L=rgb2lab(sr/n,sg/n,sb/n);const i=gy*gw+gx;
+    blab[i*3]=L[0];blab[i*3+1]=L[1];blab[i*3+2]=L[2];
   }
-  const fg=new Uint8Array(N);
-  for(let i=0;i<N;i++)fg[i]=bg[i]?0:1;
-  // 安全兜底：几乎全被洗掉 -> 判定失败，全部当前景
-  if(fg.reduce((a,b)=>a+b,0) < N*0.005){ fg.fill(1); }
+  // 边缘带块采样 -> 背景色心
+  const band=Math.max(1,Math.round(Math.min(gw,gh)*0.06));
+  const samp=[];
+  for(let gy=0;gy<gh;gy++)for(let gx=0;gx<gw;gx++){
+    if(gx<band||gx>=gw-band||gy<band||gy>=gh-band){const i=gy*gw+gx;samp.push(blab[i*3],blab[i*3+1],blab[i*3+2]);}
+  }
+  const cen=_kmB(Float64Array.from(samp),6,8);const K=cen.length/3;
+  // 判断每个色心是否为"真背景色"：统计它在边缘带块里的命中数。
+  // 深色若大量出现在边缘 => 是深色背景(如深蓝海底) => 不降权，正常清除；
+  // 深色若很少出现在边缘 => 可能是深色主体(如头发) => 降权保护。
+  const edgeHit=new Int32Array(K);
+  for(let s=0;s<samp.length;s+=3){
+    let bc=0,bd=1e18;
+    for(let c=0;c<K;c++){const d=(samp[s]-cen[c*3])**2+(samp[s+1]-cen[c*3+1])**2+(samp[s+2]-cen[c*3+2])**2;if(d<bd){bd=d;bc=c;}}
+    edgeHit[bc]++;
+  }
+  const edgeTot=samp.length/3;
+  const cenTol=new Float64Array(K);
+  for(let c=0;c<K;c++){
+    const isDark=cen[c*3]<35;
+    const edgyEnough=edgeHit[c] >= edgeTot*0.20;   // 该色心占边缘≥20% 视为真背景(深色背景)
+    cenTol[c] = (isDark && !edgyEnough) ? deTol*0.5 : deTol;  // 仅"深且不常在边缘"才降权
+  }
+  const extra=[];
+  if(opts.seeds)for(const[sx,sy]of opts.seeds){
+    const gi=Math.min(gh-1,Math.max(0,Math.floor(sy/cs)))*gw+Math.min(gw-1,Math.max(0,Math.floor(sx/cs)));
+    extra.push(blab[gi*3],blab[gi*3+1],blab[gi*3+2]);}
+  const nearBg=i=>{
+    for(let c=0;c<K;c++){
+      if(Math.sqrt((blab[i*3]-cen[c*3])**2+(blab[i*3+1]-cen[c*3+1])**2+(blab[i*3+2]-cen[c*3+2])**2)<=cenTol[c])return true;}
+    for(let e=0;e<extra.length;e+=3){if(Math.sqrt((blab[i*3]-extra[e])**2+(blab[i*3+1]-extra[e+1])**2+(blab[i*3+2]-extra[e+2])**2)<=deTol)return true;}
+    return false;};
+  const bg=new Uint8Array(gw*gh),st=[];
+  const seed=i=>{if(!bg[i]&&nearBg(i)){bg[i]=1;st.push(i);}};
+  for(let x=0;x<gw;x++){seed(x);seed((gh-1)*gw+x);}
+  for(let y=0;y<gh;y++){seed(y*gw);seed(y*gw+gw-1);}
+  if(opts.seeds)for(const[sx,sy]of opts.seeds){
+    const gi=Math.min(gh-1,Math.max(0,Math.floor(sy/cs)))*gw+Math.min(gw-1,Math.max(0,Math.floor(sx/cs)));
+    if(!bg[gi]){bg[gi]=1;st.push(gi);}}
+  while(st.length){const i=st.pop(),x=i%gw,y=(i/gw)|0;
+    const t=j=>{if(!bg[j]&&nearBg(j)){bg[j]=1;st.push(j);}};
+    if(x>0)t(i-1);if(x<gw-1)t(i+1);if(y>0)t(i-gw);if(y<gh-1)t(i+gw);}
+  let bfg=new Uint8Array(gw*gh);for(let i=0;i<gw*gh;i++)bfg[i]=bg[i]?0:1;
+  // 二次背景建模：用第一轮已确认的背景块(不止边缘带)重新聚类，
+  // 覆盖"背景色在图像内部才出现的过渡色"(如海底深蓝的中间调)，
+  // 再做全图非连通兜底，清掉被主体截断、泛洪够不到的背景孤岛。
+  {
+    const bsamp=[];
+    for(let i=0;i<gw*gh;i++) if(bg[i]){bsamp.push(blab[i*3],blab[i*3+1],blab[i*3+2]);}
+    if(bsamp.length>=12*3){
+      const cen2=_kmB(Float64Array.from(bsamp),12,8); const K2=cen2.length/3;
+      // 每个二次色心的匹配阈值：深色降权规则同样适用(防止吃掉深色主体)
+      const t2=new Float64Array(K2);
+      for(let c=0;c<K2;c++) t2[c]=deTol*0.8;
+      const seedRef=[];
+      for(let e=0;e<extra.length;e+=3) seedRef.push([extra[e],extra[e+1],extra[e+2]]);
+      for(let i=0;i<gw*gh;i++){
+        if(!bfg[i])continue;
+        let hit=false;
+        for(let c=0;c<K2&&!hit;c++){
+          if(Math.sqrt((blab[i*3]-cen2[c*3])**2+(blab[i*3+1]-cen2[c*3+1])**2+(blab[i*3+2]-cen2[c*3+2])**2)<=t2[c])hit=true;
+        }
+        for(let s=0;s<seedRef.length&&!hit;s++){
+          const r=seedRef[s];
+          if(Math.sqrt((blab[i*3]-r[0])**2+(blab[i*3+1]-r[1])**2+(blab[i*3+2]-r[2])**2)<=deTol*1.15)hit=true;
+        }
+        if(hit)bfg[i]=0;
+      }
+    }
+  }
+  // 填洞+最大连通域(块级)
+  {const vis=new Uint8Array(gw*gh),q=[];
+   const pq=i=>{if(!vis[i]&&!bfg[i]){vis[i]=1;q.push(i);}};
+   for(let x=0;x<gw;x++){pq(x);pq((gh-1)*gw+x);}
+   for(let y=0;y<gh;y++){pq(y*gw);pq(y*gw+gw-1);}
+   while(q.length){const i=q.pop(),x=i%gw,y=(i/gw)|0;
+     if(x>0)pq(i-1);if(x<gw-1)pq(i+1);if(y>0)pq(i-gw);if(y<gh-1)pq(i+gw);}
+   for(let i=0;i<gw*gh;i++)if(!bfg[i]&&!vis[i])bfg[i]=1;}
+  {const cid=new Int32Array(gw*gh).fill(-1);let best=-1,bestN=0,cur=0;
+   for(let s=0;s<gw*gh;s++){
+     if(!bfg[s]||cid[s]>=0)continue;
+     let cnt=0;const q=[s];cid[s]=cur;
+     while(q.length){const i=q.pop();cnt++;const x=i%gw,y=(i/gw)|0;
+       const t=j=>{if(bfg[j]&&cid[j]<0){cid[j]=cur;q.push(j);}};
+       if(x>0)t(i-1);if(x<gw-1)t(i+1);if(y>0)t(i-gw);if(y<gh-1)t(i+gw);}
+     if(cnt>bestN){bestN=cnt;best=cur;}cur++;}
+   for(let i=0;i<gw*gh;i++)if(bfg[i]&&cid[i]!==best)bfg[i]=0;}
+  // 深色邻接回收：头发等深色主体若与主体相邻，则逐轮吸收回前景
+  // 双重约束：①离主体质心不超过 1.8 倍半径(防止顺深色链爬出)
+  //          ②该深色块不能贴合任何背景色心(否则深蓝海底等深色背景会被误吸)
+  {
+    let cx=0,cy=0,n0=0;
+    for(let gy=0;gy<gh;gy++)for(let gx=0;gx<gw;gx++)if(bfg[gy*gw+gx]){cx+=gx;cy+=gy;n0++;}
+    if(n0>0){
+      cx/=n0;cy/=n0;
+      const rad=Math.sqrt(n0/Math.PI)*1.8;
+      // 深色 且 不接近任何背景色心(含点选背景) 才算"深色主体"
+      const isBgColor=i=>{
+        for(let c=0;c<K;c++){if(Math.sqrt((blab[i*3]-cen[c*3])**2+(blab[i*3+1]-cen[c*3+1])**2+(blab[i*3+2]-cen[c*3+2])**2)<=deTol*0.7)return true;}
+        for(let e=0;e<extra.length;e+=3){if(Math.sqrt((blab[i*3]-extra[e])**2+(blab[i*3+1]-extra[e+1])**2+(blab[i*3+2]-extra[e+2])**2)<=deTol*0.7)return true;}
+        return false;
+      };
+      const dark=i=>blab[i*3]<42 && !isBgColor(i);
+      for(let round=0;round<14;round++){
+        let changed=false;
+        for(let gy=0;gy<gh;gy++)for(let gx=0;gx<gw;gx++){
+          const i=gy*gw+gx;
+          if(bfg[i]||!dark(i))continue;
+          if(Math.hypot(gx-cx,gy-cy)>rad)continue;
+          const nb=(gx>0&&bfg[i-1])||(gx<gw-1&&bfg[i+1])||(gy>0&&bfg[i-gw])||(gy<gh-1&&bfg[i+gw]);
+          if(nb){bfg[i]=1;changed=true;}
+        }
+        if(!changed)break;
+      }
+    }
+  }
+  // 展开回像素
+  const fg=new Uint8Array(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)
+    fg[y*w+x]=bfg[Math.floor(y/cs)*gw+Math.floor(x/cs)];
+  if(fg.reduce((a,b)=>a+b,0)<w*h*0.005)fg.fill(1);
   return fg;
 }
 
@@ -504,17 +624,17 @@ function mirrorChart(ch){
   return Object.assign({},ch,{cellFg:fg, cellKey:key});
 }
 
+
 function buildChart(data,w,h,params){
   const grid=Math.max(16,Math.min(96,params.grid|0)),k=params.k|0,mergeDe=params.mergeDe,darkThr=params.darkThr;
   const S=params.vividStrength||1.6;
-  // 抠图：可关闭；可传入用户点选的背景种子与容差
+  // 抠图：可关闭；可传背景种子（点选背景）
   const fg = (params.cutout===false)
     ? new Uint8Array(w*h).fill(1)
-    : segmentForeground(data,w,h,{deTol:params.deTol, edgeTol:params.edgeTol, seeds:params.seeds});
-  // 传神仅低分辨率启用；若自动判为卡通/平涂且用户未手动强制，则自动关闭
-  let vivid=params.vivid&&grid<=32, cartoon=false;
+    : segmentForeground(data,w,h,{seeds:params.seeds});
+  // 传神增强已下线；保留卡通/平涂自动检测（仅用于提示，不改变出图）
+  let vivid=false, cartoon=false;
   if(grid<=32) cartoon=detectFlat(data,w,h,fg);
-  if(vivid && cartoon && !params.vividForce) vivid=false;
   let x0=w,y0=h,x1=0,y1=0,any=false;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(fg[y*w+x]){any=true;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
   if(!any)throw new Error("没有检测到主体，换一张干净底图试试");
@@ -754,7 +874,7 @@ function renderComposite(chart, thumbImg, palKey){
   // 署名
   ctx.font='700 13px ui-rounded,"PingFang SC","Microsoft YaHei",sans-serif';
   ctx.fillStyle='#A08355';
-  ctx.fillText('四喜lsx 制', tx, ty+38);
+  ctx.fillText('by 四喜', tx, ty+38);
   // 清单标题
   let ly=y+Math.max(thumbH,86)+18;
   ctx.font='700 13px ui-rounded,"PingFang SC","Microsoft YaHei",sans-serif'; ctx.fillStyle='#8B8398';
@@ -839,12 +959,8 @@ $('dark').oninput=e=>$('dVal').textContent=e.target.value+'%';
 $('gridChips').onclick=e=>{const c=e.target.closest('.chip');if(!c)return;[...$('gridChips').children].forEach(x=>x.classList.remove('on'));c.classList.add('on');curGrid=+c.dataset.v;};
 // 高级折叠
 $('advToggle').onclick=()=>{$('advToggle').classList.toggle('open');$('adv').classList.toggle('open');};
-// 记录用户是否手动拨过"传神"开关（手动开启则不再自动关闭）
-let vividTouched=false;
-$('vivid').addEventListener('change',()=>{vividTouched=true;});
 
 // ---- 抠图交互 ----
-$('tol').oninput=e=>$('tolVal').textContent=e.target.value;
 $('cutout').addEventListener('change',e=>{
   $('cutRow').style.display = e.target.checked ? '' : 'none';
 });
@@ -913,34 +1029,26 @@ $('go').onclick=async()=>{
   hideErr(); hideNote();
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); // 让转圈先画出来
   try{
-    // 分辨率越高，取样底图越大（但有上限防止手机卡）
-    const maxSide=Math.min(1400, Math.max(700, curGrid*16));
+    // 抠图与取样始终用高分辨率底图(与96一致)，保证低分辨率也有同样干净的边界；
+    // 目标分辨率只在 buildChart 内部降格那一步生效。
+    const maxSide=1400;
     const {data,w,h}=imgToData(curImg, maxSide);
     const seeds = bgSeeds.map(([u,v])=>[Math.round(u*w), Math.round(v*h)]);
     const params={grid:curGrid, k:+$('k').value, mergeDe:+$('merge').value, darkThr:(+$('dark').value)/100,
-      vivid:$('vivid').checked, vividForce:(vividTouched&&$('vivid').checked),
-      cutout:$('cutout').checked, deTol:+$('tol').value, seeds:seeds.length?seeds:null};
+      cutout:$('cutout').checked, seeds:seeds.length?seeds:null};
     let chart=buildChart(data,w,h,params);
     const palKey=$('palette').value;
-    // 卡通图误开传神 -> 自动关并提示
-    if(chart.cartoon && !chart.vividApplied && $('vivid').checked){
-      $('vivid').checked=false;
-      showNote('🖌 检测到<b>卡通/平涂</b>风格，已自动关闭「传神增强」以免大色块变花。');
-    }
-    // 写实图 + 低分辨率 + 传神没开 -> 反向提示可以开
-    else if(curGrid<=32 && !$('vivid').checked && !chart.cartoon){
-      showNote('💡 这张图看起来偏<b>写实</b>，低分辨率下可到高级选项打开「传神增强」，眉眼会更有神。');
-    }
     chart=snapToPalette(chart, palKey);
     if($('mirror').checked) chart=mirrorChart(chart);
 
-    // 缩略图（用同一张白底 work canvas 的内容）
+    // 缩略图（原图白底）
     const thumb=new Image();
     thumb.src=$('work').toDataURL('image/png');
     await new Promise(res=>{thumb.onload=res;});
 
     const cv=renderComposite(chart, thumb, palKey);
     lastCanvas=cv;
+
     $('resultImg').src=cv.toDataURL('image/png');
     $('stSize').textContent=`${chart.gw}×${chart.gh}`;
     $('stTotal').textContent=chart.total;
@@ -977,7 +1085,7 @@ $('btnShare').onclick=async()=>{
   lastCanvas.toBlob(async blob=>{
     const file=new File([blob],'拼豆施工图.png',{type:'image/png'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){
-      try{await navigator.share({files:[file],title:'拼豆施工图',text:'我做的拼豆图纸 · 四喜lsx'});}
+      try{await navigator.share({files:[file],title:'拼豆施工图',text:'我做的拼豆图纸 · by 四喜'});}
       catch(e){}
     }else{
       showErr('当前环境不支持直接分享（多见于本地直接打开文件）。可先「保存图片」，或把本页放到网址上打开即可分享。');
@@ -987,7 +1095,7 @@ $('btnShare').onclick=async()=>{
 
 // 内联 manifest，便于「添加到主屏幕」
 try{
-  const mani={name:'拼豆施工图 · 四喜lsx',short_name:'拼豆图',display:'standalone',background_color:'#FAF2E6',theme_color:'#FAF2E6',icons:[]};
+  const mani={name:'拼豆施工图 · by 四喜',short_name:'拼豆图',display:'standalone',background_color:'#FAF2E6',theme_color:'#FAF2E6',icons:[]};
   const blob=new Blob([JSON.stringify(mani)],{type:'application/manifest+json'});
   const link=document.createElement('link'); link.rel='manifest'; link.href=URL.createObjectURL(blob);
   document.head.appendChild(link);
