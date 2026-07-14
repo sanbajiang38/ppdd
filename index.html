@@ -117,6 +117,12 @@
   .seg button.on{border-color:var(--grape);color:#fff;background:linear-gradient(135deg,var(--grape),var(--grape-d));
     box-shadow:0 3px 8px rgba(106,75,214,.28);}
   .seg button:active{transform:translateY(1px);}
+  #gridInput,#kInput{width:96px;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;
+    font-size:15px;font-weight:700;color:var(--ink);background:#fff;outline:none;-moz-appearance:textfield;}
+  #gridInput:focus,#kInput:focus{border-color:var(--grape);}
+  #gridInput::-webkit-outer-spin-button,#gridInput::-webkit-inner-spin-button,
+  #kInput::-webkit-outer-spin-button,#kInput::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .board-note{margin-left:10px;font-size:12.5px;font-weight:700;color:var(--muted);}
 
   /* 控件 */
   .row{margin-bottom:16px;}
@@ -275,7 +281,11 @@
     <div class="row">
       <div class="top"><span class="lab">颜色数</span><span class="val" id="kVal">24</span></div>
       <input type="range" id="k" min="6" max="40" value="24">
-      <div class="hint">最多用多少种豆色 · 越大越细腻，但配色更难买齐</div>
+      <div class="hint">最多用多少种豆色 · 越大越细腻，但配色更难买齐 · <span id="kCustomLink" style="color:var(--grape);font-weight:700;cursor:pointer;">手动输入</span></div>
+      <div id="kCustomWrap" style="display:none;margin-top:8px;">
+        <input type="number" id="kInput" min="2" max="80" step="1" placeholder="2–80" inputmode="numeric">
+        <span class="board-note">种颜色</span>
+      </div>
     </div>
 
     <div class="row">
@@ -286,8 +296,13 @@
         <div class="chip on" data-v="48">48</div>
         <div class="chip" data-v="64">64</div>
         <div class="chip" data-v="96">96</div>
+        <div class="chip" data-v="custom">自定义</div>
       </div>
-      <div class="hint">按长边算 · 越大越精细、生成越慢（手机建议 48–64）</div>
+      <div id="gridCustom" style="display:none;margin-top:8px;">
+        <input type="number" id="gridInput" min="16" max="208" step="1" placeholder="16–208" inputmode="numeric">
+        <span class="board-note" id="boardNote"></span>
+      </div>
+      <div class="hint">按长边算 · 越大越精细、生成越慢（手机建议 48–64）· 每 52 格＝一张拼豆板</div>
     </div>
 
     <div class="adv-toggle" id="advToggle"><span class="arrow">▸</span> 高级选项</div>
@@ -641,7 +656,7 @@ function mirrorChart(ch){
 
 
 function buildChart(data,w,h,params){
-  const grid=Math.max(16,Math.min(96,params.grid|0)),k=params.k|0,mergeDe=params.mergeDe,darkThr=params.darkThr;
+  const grid=Math.max(16,Math.min(208,params.grid|0)),k=params.k|0,mergeDe=params.mergeDe,darkThr=params.darkThr;
   const S=params.vividStrength||1.6;
   // 抠图：可关闭；可传背景种子（点选背景）
   const fg = (params.cutout===false)
@@ -943,6 +958,14 @@ function loadFile(f){
 
 // 颜色数
 $('k').oninput=e=>$('kVal').textContent=e.target.value;
+// 颜色数：手动输入切换
+let kCustom=false;
+$('kCustomLink').onclick=()=>{
+  kCustom=!kCustom;
+  $('kCustomWrap').style.display = kCustom?'block':'none';
+  $('kCustomLink').textContent = kCustom?'用滑杆':'手动输入';
+  if(kCustom && !$('kInput').value) $('kInput').value=$('k').value;
+};
 
 // ---- 风格档位：一个选择同时驱动 合并强度 + 描边保留 ----
 // 50(均衡) 恰好等于原来的默认值 (mergeDe=18, darkThr=0.30)
@@ -970,8 +993,34 @@ $('expertToggle').onclick=()=>{
 };
 $('merge').oninput=e=>$('mVal').textContent=e.target.value;
 $('dark').oninput=e=>$('dVal').textContent=e.target.value+'%';
-// 分辨率 chips
-$('gridChips').onclick=e=>{const c=e.target.closest('.chip');if(!c)return;[...$('gridChips').children].forEach(x=>x.classList.remove('on'));c.classList.add('on');curGrid=+c.dataset.v;};
+// 分辨率 chips（含自定义）
+function updateBoardNote(){
+  const g=curGrid|0;
+  if(g>=16){
+    const n=Math.max(1,Math.ceil(g/52));
+    $('boardNote').textContent = `≈ ${g} 格 · 长边约 ${n} 张拼豆板`;
+  }else $('boardNote').textContent='';
+}
+$('gridChips').onclick=e=>{
+  const c=e.target.closest('.chip'); if(!c)return;
+  [...$('gridChips').children].forEach(x=>x.classList.remove('on'));
+  c.classList.add('on');
+  if(c.dataset.v==='custom'){
+    $('gridCustom').style.display='block';
+    const v=parseInt($('gridInput').value,10);
+    if(v>=16){curGrid=Math.min(208,v);} else {curGrid=48;}
+    updateBoardNote();
+  }else{
+    $('gridCustom').style.display='none';
+    curGrid=+c.dataset.v;
+  }
+};
+$('gridInput').oninput=e=>{
+  let v=parseInt(e.target.value,10);
+  if(!(v>=16)){updateBoardNote();return;}
+  v=Math.min(208,Math.max(16,v));
+  curGrid=v; updateBoardNote();
+};
 // 高级折叠
 $('advToggle').onclick=()=>{$('advToggle').classList.toggle('open');$('adv').classList.toggle('open');};
 
@@ -1056,7 +1105,10 @@ $('go').onclick=async()=>{
     const maxSide=1400;
     const {data,w,h}=imgToData(curImg, maxSide);
     const seeds = bgSeeds.map(([u,v])=>[Math.round(u*w), Math.round(v*h)]);
-    const params={grid:curGrid, k:+$('k').value, mergeDe:+$('merge').value, darkThr:(+$('dark').value)/100,
+    const kVal = kCustom
+      ? Math.min(80,Math.max(2, parseInt($('kInput').value,10)||+$('k').value))
+      : +$('k').value;
+    const params={grid:curGrid, k:kVal, mergeDe:+$('merge').value, darkThr:(+$('dark').value)/100,
       cutout:$('cutout').checked, seeds:seeds.length?seeds:null, deTol:cutTol};
     let chart=buildChart(data,w,h,params);
     const palKey=$('palette').value;
