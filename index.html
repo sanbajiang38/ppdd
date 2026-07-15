@@ -655,45 +655,174 @@ function mirrorChart(ch){
 }
 
 
+// ===== 预聚类：把前景聚成 nc 个主色（5bit分桶缓存，避免逐像素算LAB） =====
+function preCluster(data,w,h,fg,nc){
+  const bucketCnt=new Int32Array(32768), bucketSum=new Float64Array(32768*3);
+  let fgTot=0;
+  for(let p=0;p<w*h;p++){
+    if(!fg[p])continue; fgTot++;
+    const r=data[p*4],g=data[p*4+1],b=data[p*4+2];
+    const key=((r>>3)<<10)|((g>>3)<<5)|(b>>3);
+    bucketCnt[key]++; bucketSum[key*3]+=r; bucketSum[key*3+1]+=g; bucketSum[key*3+2]+=b;
+  }
+  if(!fgTot)return null;
+  const keys=[],bl=[];
+  for(let key=0;key<32768;key++){
+    if(!bucketCnt[key])continue;
+    const n=bucketCnt[key];
+    bl.push(rgb2lab(bucketSum[key*3]/n,bucketSum[key*3+1]/n,bucketSum[key*3+2]/n));
+    keys.push(key);
+  }
+  const nb=keys.length; if(nb<nc)return null;
+  const samp=[];
+  for(let i=0;i<nb;i++){
+    const rep=Math.max(1,Math.round(bucketCnt[keys[i]]/Math.max(1,fgTot/4000)));
+    for(let t=0;t<Math.min(rep,60);t++) samp.push(bl[i][0],bl[i][1],bl[i][2]);
+  }
+  const n=samp.length/3; if(n<nc)return null;
+  const km=kmeans(Float64Array.from(samp),n,nc,{seed:7});
+  const b2c=new Int32Array(32768).fill(-1);
+  for(let i=0;i<nb;i++){
+    let bc=0,bd=Infinity;
+    for(let c=0;c<km.k;c++){
+      const d=(bl[i][0]-km.centers[c*3])**2+(bl[i][1]-km.centers[c*3+1])**2+(bl[i][2]-km.centers[c*3+2])**2;
+      if(d<bd){bd=d;bc=c;}
+    }
+    b2c[keys[i]]=bc;
+  }
+  const lab=new Int32Array(w*h).fill(-1), area=new Int32Array(km.k);
+  for(let p=0;p<w*h;p++){
+    if(!fg[p])continue;
+    const c=b2c[((data[p*4]>>3)<<10)|((data[p*4+1]>>3)<<5)|(data[p*4+2]>>3)];
+    lab[p]=c; if(c>=0)area[c]++;
+  }
+  return {lab,area,centers:km.centers,k:km.k,fgTot};
+}
+// 腐蚀存活率：细长线条腐蚀后几乎消失，实心块still在
+function _survival(mask,w,h,r){
+  let cur=mask,n0=0;
+  for(let i=0;i<w*h;i++) if(mask[i])n0++;
+  if(!n0)return 1;
+  for(let s=0;s<r;s++){
+    const nx=new Uint8Array(w*h);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      const i=y*w+x; if(!cur[i])continue;
+      if(x>0&&!cur[i-1])continue; if(x<w-1&&!cur[i+1])continue;
+      if(y>0&&!cur[i-w])continue; if(y<h-1&&!cur[i+w])continue;
+      nx[i]=1;
+    }
+    cur=nx;
+  }
+  let n1=0; for(let i=0;i<w*h;i++) if(cur[i])n1++;
+  return n1/n0;
+}
+// 连通性：真描边是少数几条连续线网；照片暗区是满地碎屑
+function _connectivity(mask,w,h){
+  const vis=new Uint8Array(w*h); let comp=0,best=0,tot=0;
+  for(let i=0;i<w*h;i++) if(mask[i])tot++;
+  for(let s=0;s<w*h;s++){
+    if(!mask[s]||vis[s])continue;
+    comp++; let cnt=0; const q=[s]; vis[s]=1;
+    while(q.length){const i=q.pop();cnt++;const x=i%w,y=(i/w)|0;
+      const t=j=>{if(mask[j]&&!vis[j]){vis[j]=1;q.push(j);}};
+      if(x>0)t(i-1);if(x<w-1)t(i+1);if(y>0)t(i-w);if(y<h-1)t(i+w);
+      if(x>0&&y>0)t(i-w-1);if(x<w-1&&y>0)t(i-w+1);
+      if(x>0&&y<h-1)t(i+w-1);if(x<w-1&&y<h-1)t(i+w+1);}
+    if(cnt>best)best=cnt;
+    if(comp>40)return {comp,largestShare:0};
+  }
+  return {comp,largestShare:tot?best/tot:0};
+}
+// ===== 自动识别描边色（不再假设描边是纯黑）=====
+// 判据：暗(L*<50) + 面积≥3% + 细长(腐蚀存活<35%) + 线网(连通块≤12) + 平涂纯色(纯度≥55%)
+// 照片的头发(实心块)、暗区碎屑、阴影(颜色不纯) 都会被挡掉 -> 照片判为"无描边"
+function detectOutline(data,w,h,fg,pc){
+  if(!pc)return null;
+  const er=Math.max(2,Math.round(Math.min(w,h)/180));
+  let best=null;
+  for(let c=0;c<pc.k;c++){
+    const L=pc.centers[c*3];
+    if(L>=50)continue;
+    const frac=pc.area[c]/pc.fgTot;
+    if(frac<0.03||frac>0.35)continue;
+    const mask=new Uint8Array(w*h);
+    for(let i=0;i<w*h;i++) if(pc.lab[i]===c)mask[i]=1;
+    if(_survival(mask,w,h,er)>=0.35)continue;
+    const cn=_connectivity(mask,w,h);
+    if(cn.comp>12||cn.largestShare<0.4)continue;
+    const cen=[pc.centers[c*3],pc.centers[c*3+1],pc.centers[c*3+2]];
+    let pure=0,n=0,sr=0,sg=0,sb=0;
+    for(let i=0;i<w*h;i++){
+      if(pc.lab[i]!==c)continue;
+      const L2=rgb2lab(data[i*4],data[i*4+1],data[i*4+2]);
+      const d=Math.sqrt((L2[0]-cen[0])**2+(L2[1]-cen[1])**2+(L2[2]-cen[2])**2);
+      if(d<=5)pure++;
+      sr+=data[i*4];sg+=data[i*4+1];sb+=data[i*4+2];n++;
+    }
+    if(pure/n<0.55)continue;
+    if(!best||L<best.L) best={c,L,rgb:[Math.round(sr/n),Math.round(sg/n),Math.round(sb/n)],frac};
+  }
+  return best;
+}
 function buildChart(data,w,h,params){
   const grid=Math.max(16,Math.min(208,params.grid|0)),k=params.k|0,mergeDe=params.mergeDe,darkThr=params.darkThr;
-  const S=params.vividStrength||1.6;
   // 抠图：可关闭；可传背景种子（点选背景）
   const fg = (params.cutout===false)
     ? new Uint8Array(w*h).fill(1)
     : segmentForeground(data,w,h,{seeds:params.seeds, deTol:params.deTol});
-  // 传神增强已下线；保留卡通/平涂自动检测（仅用于提示，不改变出图）
-  let vivid=false, cartoon=false;
-  if(grid<=32) cartoon=detectFlat(data,w,h,fg);
   let x0=w,y0=h,x1=0,y1=0,any=false;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(fg[y*w+x]){any=true;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
   if(!any)throw new Error("没有检测到主体，换一张干净底图试试");
   x1++;y1++;const W=x1-x0,H=y1-y0;
   let gw,gh;if(W>=H){gw=grid;gh=Math.max(1,Math.round(grid*H/W));}else{gh=grid;gw=Math.max(1,Math.round(grid*W/H));}
+
+  // 预聚类两套：粗(10簇)专用于识别描边(阈值经实图验证)；细(跟随颜色数)用于众数投票，
+  // 避免众数把可用颜色卡死在10种以内。
+  const pcC=preCluster(data,w,h,fg,10);
+  const outline=detectOutline(data,w,h,fg,pcC);
+  // 有描边=矢量卡通 -> 众数降采样(保脆边)；无描边=照片 -> 均值降采样(保渐变)
+  const pcF=outline?preCluster(data,w,h,fg,Math.max(14,Math.min(32,k+6))):null;
+  const useMode=!!(outline&&pcF);
+
   const cellFg=new Uint8Array(gw*gh),cellOutline=new Uint8Array(gw*gh),cellRGB=new Float64Array(gw*gh*3);
+  const vote=new Int32Array(pcF?pcF.k:1);
   for(let j=0;j<gh;j++){const sy=y0+Math.floor(j*H/gh),ey=y0+Math.floor((j+1)*H/gh);
     for(let i=0;i<gw;i++){const sx=x0+Math.floor(i*W/gw),ex=x0+Math.floor((i+1)*W/gw);
-      let mr=0,mg=0,mb=0,nn=0,fgc=0,tot=0;const px=[];
-      for(let yy=sy;yy<ey;yy++)for(let xx=sx;xx<ex;xx++){tot++;const p=yy*w+xx;if(!fg[p])continue;fgc++;const r=data[p*4],g=data[p*4+1],b=data[p*4+2];if(vivid)px.push(p);mr+=r;mg+=g;mb+=b;nn++;}
       const idx=j*gw+i;
-      if(!(tot>0&&fgc/tot>=0.5))continue;
-      cellFg[idx]=1;mr/=nn;mg/=nn;mb/=nn;
-      // 绝对黑描边（沿用）
-      let darkAbs=0;for(let yy=sy;yy<ey;yy++)for(let xx=sx;xx<ex;xx++){const p=yy*w+xx;if(!fg[p])continue;if(data[p*4]+data[p*4+1]+data[p*4+2]<150)darkAbs++;}
-      if(darkAbs/fgc>=darkThr){cellOutline[idx]=1;continue;}
-      if(!vivid){cellRGB[idx*3]=mr;cellRGB[idx*3+1]=mg;cellRGB[idx*3+2]=mb;continue;}
-      // 传神：招1 显著性加权 + 招2 特征抢格
-      const mluma=mr+mg+mb;let sr=0,sg=0,sb=0,sw=0,fr=0,fg2=0,fb=0,fn=0;
-      for(const p of px){const r=data[p*4],g=data[p*4+1],b=data[p*4+2];
-        const dev=Math.sqrt((r-mr)**2+(g-mg)**2+(b-mb)**2)/255;
-        const dark=Math.max(0,(500-(r+g+b))/500);
-        const wgt=1+S*(dev*2.0+dark*1.4);
-        sr+=r*wgt;sg+=g*wgt;sb+=b*wgt;sw+=wgt;
-        if((r+g+b)<mluma-120){fr+=r;fg2+=g;fb+=b;fn++;}
+      let fgc=0,tot=0,mr=0,mg=0,mb=0,olc=0;
+      if(useMode)vote.fill(0);
+      for(let yy=sy;yy<ey;yy++)for(let xx=sx;xx<ex;xx++){
+        tot++; const p=yy*w+xx; if(!fg[p])continue; fgc++;
+        mr+=data[p*4];mg+=data[p*4+1];mb+=data[p*4+2];
+        const isOl = outline && pcC.lab[p]===outline.c;
+        if(isOl)olc++;
+        if(useMode&&!isOl){const f=pcF.lab[p]; if(f>=0)vote[f]++;}   // 投票只统计非描边像素
       }
-      if(fn>0&&fn/fgc>=0.12){cellRGB[idx*3]=fr/fn;cellRGB[idx*3+1]=fg2/fn;cellRGB[idx*3+2]=fb/fn;}
-      else{cellRGB[idx*3]=sr/sw;cellRGB[idx*3+1]=sg/sw;cellRGB[idx*3+2]=sb/sw;}
+      if(!(tot>0&&fgc/tot>=0.5))continue;
+      cellFg[idx]=1;
+      // 描边格：本格里描边色像素占比达到"描边保留"阈值
+      if(outline&&olc/fgc>=darkThr){
+        cellOutline[idx]=1;
+        cellRGB[idx*3]=outline.rgb[0];cellRGB[idx*3+1]=outline.rgb[1];cellRGB[idx*3+2]=outline.rgb[2];
+        continue;
+      }
+      if(useMode){
+        // 众数：本格里票最多的主色胜出，再用该主色像素的均值定色(保精度不糊边)
+        let bc=-1,bv=-1;
+        for(let c=0;c<pcF.k;c++) if(vote[c]>bv){bv=vote[c];bc=c;}
+        if(bc>=0&&bv>0){
+          let sr=0,sg=0,sb=0,n=0;
+          for(let yy=sy;yy<ey;yy++)for(let xx=sx;xx<ex;xx++){
+            const p=yy*w+xx; if(!fg[p]||pcF.lab[p]!==bc)continue;
+            if(pcC.lab[p]===outline.c)continue;
+            sr+=data[p*4];sg+=data[p*4+1];sb+=data[p*4+2];n++;
+          }
+          if(n>0){cellRGB[idx*3]=sr/n;cellRGB[idx*3+1]=sg/n;cellRGB[idx*3+2]=sb/n;continue;}
+        }
+      }
+      cellRGB[idx*3]=mr/fgc;cellRGB[idx*3+1]=mg/fgc;cellRGB[idx*3+2]=mb/fgc;
     }}
+
   const idxList=[];for(let idx=0;idx<gw*gh;idx++)if(cellFg[idx]&&!cellOutline[idx])idxList.push(idx);
   const n=idxList.length;if(n===0)throw new Error("没有可聚类的颜色，描边保留调高一点");
   const pts=new Float64Array(n*3);
@@ -705,13 +834,15 @@ function buildChart(data,w,h,params){
   for(const g of groups){let big=-1,bc=-1;for(let c=0;c<km.k;c++)if(groupOf[c]===g){const cc=km.counts[c];if(cc>bc){bc=cc;big=c;}}const s=clusterSum[big]||[0,0,0,1];groupRep[g]=[Math.round(s[0]/Math.max(1,s[3])),Math.round(s[1]/Math.max(1,s[3])),Math.round(s[2]/Math.max(1,s[3]))];}
   const cellColor=new Array(gw*gh).fill(null);
   for(let t=0;t<n;t++){cellColor[idxList[t]]=groupRep[groupOf[km.labels[t]]];}
-  for(let idx=0;idx<gw*gh;idx++)if(cellOutline[idx])cellColor[idx]=[0,0,0];
+  // 描边格用识别出的真实描边色（不再硬编码纯黑）
+  const olRGB=outline?outline.rgb:[0,0,0];
+  for(let idx=0;idx<gw*gh;idx++)if(cellOutline[idx])cellColor[idx]=olRGB;
   const counts={};const cellKey=new Array(gw*gh).fill(null);
   for(let idx=0;idx<gw*gh;idx++){if(!cellFg[idx])continue;const col=cellColor[idx];if(!col)continue;const key=toHex(col);counts[key]=(counts[key]||0)+1;cellKey[idx]=key;}
   const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);const labels=genLabels(sorted.length);const k2l={};sorted.forEach((e,i)=>k2l[e[0]]=labels[i]);
   const colors=sorted.map(([key,count])=>({key,label:k2l[key],count,rgb:hexToRgb(key)}));
   const total=sorted.reduce((s,e)=>s+e[1],0);
-  return{gw,gh,cellFg,cellKey,keyToLabel:k2l,colors,total,cartoon,vividApplied:vivid};
+  return{gw,gh,cellFg,cellKey,keyToLabel:k2l,colors,total,outlineHex:outline?toHex(outline.rgb):null,mode:useMode?'mode':'mean'};
 }
 
 /* ============ 出图（合成可保存的整张图）============ */
